@@ -12,20 +12,20 @@ port module Liquidate exposing
     , view
     )
 
-import CompoundApi.Presidio.Accounts.Models exposing (AccountResponse)
-import CompoundComponents.Console as Console
-import CompoundComponents.DisplayCurrency as DisplayCurrency exposing (DisplayCurrency)
-import CompoundComponents.Eth.Decoders exposing (decimal, decodeAssetAddress, decodeCustomerAddress)
-import CompoundComponents.Eth.Ethereum as Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), EtherscanLinkValue(..), etherscanLink, getAssetAddressString, getContractAddressString, getCustomerAddressString)
-import CompoundComponents.Eth.Network exposing (Network(..))
-import CompoundComponents.Eth.TokenMath as TokenMath
-import CompoundComponents.Functions as Functions
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (class, id, placeholder, type_, value)
-import CompoundComponents.Utils.Markup exposing (disabled, selected)
-import CompoundComponents.Utils.NumberFormatter as NumberFormatter
+import GroveApi.Presidio.Accounts.Models exposing (AccountResponse)
+import GroveComponents.Console as Console
+import GroveComponents.DisplayCurrency as DisplayCurrency exposing (DisplayCurrency)
+import GroveComponents.Eth.Decoders exposing (decimal, decodeAssetAddress, decodeCustomerAddress)
+import GroveComponents.Eth.Ethereum as Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), EtherscanLinkValue(..), etherscanLink, getAssetAddressString, getContractAddressString, getCustomerAddressString)
+import GroveComponents.Eth.Network exposing (Network(..))
+import GroveComponents.Eth.TokenMath as TokenMath
+import GroveComponents.Functions as Functions
+import GroveComponents.Utils.GroveHtmlAttributes exposing (class, id, placeholder, type_, value)
+import GroveComponents.Utils.Markup exposing (disabled, selected)
+import GroveComponents.Utils.NumberFormatter as NumberFormatter
 import Decimal exposing (Decimal)
 import Dict exposing (Dict)
-import Eth.Compound exposing (CompoundState)
+import Eth.Grove exposing (GroveState)
 import Eth.Config exposing (Config, getCTokenAddresses)
 import Eth.Oracle exposing (OracleState)
 import Eth.Token exposing (CTokenSet, Token, TokenMsg, TokenState, getCTokenByAddress, getUnderlyingTokenDecimals, getUnderlyingTokenSymbol)
@@ -314,8 +314,8 @@ subscriptions =
         ]
 
 
-view : Translations.Lang -> Time.Zone -> Maybe Config -> Maybe Network -> Account -> CompoundState -> TokenState -> OracleState -> Preferences -> TransactionState -> Model -> Html Msg
-view userLanguage currentTimeZone maybeConfig maybeNetwork account compoundState tokenState oracleState preferences transactionState model =
+view : Translations.Lang -> Time.Zone -> Maybe Config -> Maybe Network -> Account -> GroveState -> TokenState -> OracleState -> Preferences -> TransactionState -> Model -> Html Msg
+view userLanguage currentTimeZone maybeConfig maybeNetwork account groveState tokenState oracleState preferences transactionState model =
     let
         maybeEtherUsdPrice =
             maybeConfig
@@ -326,7 +326,7 @@ view userLanguage currentTimeZone maybeConfig maybeNetwork account compoundState
             [ outstandingBorrowsView maybeEtherUsdPrice preferences.displayCurrency model
             ]
         , div [ class "container" ]
-            [ selectedBorrowerView maybeEtherUsdPrice compoundState.maybeCloseFactor compoundState.maybeLiquidationIncentive tokenState oracleState preferences.displayCurrency model.maybeSelectedBorrow
+            [ selectedBorrowerView maybeEtherUsdPrice groveState.maybeCloseFactor groveState.maybeLiquidationIncentive tokenState oracleState preferences.displayCurrency model.maybeSelectedBorrow
             , recentActivityView userLanguage currentTimeZone transactionState.transactions maybeNetwork account tokenState.cTokens
             ]
         ]
@@ -339,7 +339,7 @@ loadAtRiskAccounts config account maybeBlockNumber apiBaseUrlMap network =
     Cmd.none
 
 
-updateBorrowerDetailWithPresidioAccount : Config -> TokenState -> OracleState -> CompoundApi.Presidio.Accounts.Models.Account -> Dict String BorrowerDetail -> Dict String BorrowerDetail
+updateBorrowerDetailWithPresidioAccount : Config -> TokenState -> OracleState -> GroveApi.Presidio.Accounts.Models.Account -> Dict String BorrowerDetail -> Dict String BorrowerDetail
 updateBorrowerDetailWithPresidioAccount config tokenState oracleState apiAccount borrowersDict =
     let
         borrowerAddressString =

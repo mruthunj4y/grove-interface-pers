@@ -14,9 +14,9 @@ port module Port exposing
     , setTitle
     )
 
-import CompoundComponents.Eth.Decoders
-import CompoundComponents.Eth.Ethereum exposing (CustomerAddress(..), TrxHash)
-import CompoundComponents.Eth.Network exposing (Network, networkFromId)
+import GroveComponents.Eth.Decoders
+import GroveComponents.Eth.Ethereum exposing (CustomerAddress(..), TrxHash)
+import GroveComponents.Eth.Network exposing (Network, networkFromId)
 import Decimal exposing (Decimal)
 import Json.Decode exposing (Value)
 
@@ -49,7 +49,7 @@ giveAccountBalance : (Result Json.Decode.Error Decimal -> msg) -> Sub msg
 giveAccountBalance wrapper =
     let
         decoder =
-            Json.Decode.field "balance" CompoundComponents.Eth.Decoders.decimal
+            Json.Decode.field "balance" GroveComponents.Eth.Decoders.decimal
     in
     giveAccountBalancePort
         (Json.Decode.decodeValue decoder >> wrapper)

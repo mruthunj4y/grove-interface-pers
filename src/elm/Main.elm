@@ -4,19 +4,6 @@ import Admin
 import Browser
 import Browser.Events
 import Browser.Navigation
-import CompoundApi.GasService.Decoders
-import CompoundApi.GasService.Models
-import CompoundApi.GasService.Urls
-import CompoundComponents.Console as Console
-import CompoundComponents.DisplayCurrency exposing (DisplayCurrency(..))
-import CompoundComponents.Eth.ConnectedEthWallet as ConnectedEthWallet exposing (tryConnect)
-import CompoundComponents.Eth.Ethereum as Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..))
-import CompoundComponents.Eth.Ledger exposing (LedgerAccount(..))
-import CompoundComponents.Eth.Network as Network exposing (Network(..), networkId)
-import CompoundComponents.Ether.BNTransaction as BNTransaction exposing (BNTransactionMsg)
-import CompoundComponents.Functions as Functions exposing (handleError)
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (HrefLinkType(..), class, href, id, target)
-import CompoundComponents.Utils.Time
 import DappInterface.ClaimCompModal as ClaimCompModal
 import DappInterface.CollateralToggleModal as CollateralToggleModal
 import DappInterface.CommonViews as CommonViews exposing (pageFooter, pageHeader)
@@ -27,14 +14,28 @@ import DappInterface.PrimaryActionModal
 import DappInterface.Propose as Propose
 import DappInterface.Terms as DappTerms
 import DappInterface.Vote as Vote
+import Debug
 import Decimal exposing (Decimal)
 import Dict exposing (Dict)
-import Eth.Compound exposing (CompoundMsg(..), clearCompoundState, compoundInit, compoundNewBlockCmd, compoundSubscriptions, compoundUpdate)
-import Eth.Config exposing (Config, loadConfigs)
+import Eth.Config exposing (Config, basicConfigDecoder, loadConfig, loadConfigs)
 import Eth.Governance exposing (GovernanceMsg(..))
+import Eth.Grove exposing (GroveMsg(..), clearGroveState, groveInit, groveNewBlockCmd, groveSubscriptions, groveUpdate)
 import Eth.Oracle exposing (OracleMsg(..), oracleInit, oracleSubscriptions, oracleUpdate)
 import Eth.Token exposing (TokenMsg(..), clearTokenState, tokenInit, tokenNewBlockCmd, tokenSubscriptions, tokenUpdate)
 import Eth.Transaction as Transaction exposing (TransactionMsg)
+import GroveApi.GasService.Decoders
+import GroveApi.GasService.Models
+import GroveApi.GasService.Urls
+import GroveComponents.Console as Console
+import GroveComponents.DisplayCurrency exposing (DisplayCurrency(..))
+import GroveComponents.Eth.ConnectedEthWallet as ConnectedEthWallet exposing (tryConnect)
+import GroveComponents.Eth.Ethereum as Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..))
+import GroveComponents.Eth.Ledger exposing (LedgerAccount(..))
+import GroveComponents.Eth.Network as Network exposing (Network(..), networkId)
+import GroveComponents.Ether.BNTransaction as BNTransaction exposing (BNTransactionMsg)
+import GroveComponents.Functions as Functions exposing (handleError)
+import GroveComponents.Utils.GroveHtmlAttributes exposing (HrefLinkType(..), class, href, id, target)
+import GroveComponents.Utils.Time
 import Html exposing (Html, a, button, div, span, text)
 import Html.Events exposing (onClick)
 import Http
@@ -73,7 +74,7 @@ type Msg
     | WrappedTransactionMsg TransactionMsg
     | WrappedBNTransactionMsg BNTransactionMsg
     | WrappedTokenMsg TokenMsg
-    | WrappedCompoundMsg CompoundMsg
+    | WrappedGroveMsg GroveMsg
     | WrappedOracleMsg OracleMsg
     | AdminMsg Admin.InternalMsg
     | ReplMsg Repl.InternalMsg
@@ -85,7 +86,7 @@ type Msg
     | VoteMsg Vote.InternalMsg
     | CheckVersion Time.Posix
     | CheckedVersion (Result Http.Error Float)
-    | RefreshGasPrice (Result Http.Error CompoundApi.GasService.Models.API_GasPriceResponse)
+    | RefreshGasPrice (Result Http.Error GroveApi.GasService.Models.API_GasPriceResponse)
 
 
 type alias Flags =
@@ -168,7 +169,7 @@ containerTranslator =
     DappInterface.Container.translator
         { onContainerParentMsg = ContainerMsg
         , onInternalMsg = ContainerInternalMsg
-        , onWrappedCompoundMsg = WrappedCompoundMsg
+        , onWrappedGroveMsg = WrappedGroveMsg
         , onWrappedPreferencesMsg = WrappedPreferencesMsg
         }
 
@@ -177,7 +178,7 @@ collateralToggleModalTranslator : CollateralToggleModal.Translator Msg
 collateralToggleModalTranslator =
     CollateralToggleModal.translator
         { onParentMsg = CollateralToggleModalParentMsg
-        , onWrappedCompoundMsg = WrappedCompoundMsg
+        , onWrappedGroveMsg = WrappedGroveMsg
         }
 
 
@@ -186,7 +187,7 @@ primaryActionModalTranslator =
     DappInterface.PrimaryActionModal.translator
         { onInternalMessage = PrimaryActionModalMsg
         , onParentMsg = PrimaryActionModalParentMsg
-        , onWrappedCompoundMsg = WrappedCompoundMsg
+        , onWrappedGroveMsg = WrappedGroveMsg
         , onWrappedTokenMsg = WrappedTokenMsg
         }
 
@@ -228,8 +229,8 @@ init { path, configurations, configAbiFiles, dataProviders, apiBaseUrlMap, userA
         ( initBNTransactionState, initBNTransactionCmd ) =
             BNTransaction.init
 
-        ( initCompoundState, initCompoundCmd ) =
-            compoundInit
+        ( initGroveState, initGroveCmd ) =
+            groveInit
 
         ( initOracleState, initOracleCmd ) =
             oracleInit
@@ -268,7 +269,7 @@ init { path, configurations, configAbiFiles, dataProviders, apiBaseUrlMap, userA
       , transactionState = initTransactionState
       , bnTransactionState = initBNTransactionState
       , tokenState = Eth.Token.emptyState
-      , compoundState = initCompoundState
+      , groveState = initGroveState
       , oracleState = initOracleState
       , preferences = initPreferences
       , governanceState = Eth.Governance.init
@@ -303,7 +304,7 @@ newNetworkCmd : Network -> Model -> Cmd Msg
 newNetworkCmd newNetwork model =
     Cmd.batch
         [ Cmd.map WrappedTransactionMsg (Tuple.second Transaction.init)
-        , Cmd.map WrappedCompoundMsg (Tuple.second compoundInit)
+        , Cmd.map WrappedGroveMsg (Tuple.second groveInit)
         , Cmd.map WrappedOracleMsg (Tuple.second oracleInit)
         , Cmd.map WrappedBNTransactionMsg (BNTransaction.newNetworkCmd newNetwork model.bnTransactionState)
         ]
@@ -332,7 +333,7 @@ newBlockCmd apiBaseUrlMap maybeNetwork blockNumber previousBlockNumber ({ dataPr
                         pageCmds
                             ++ [ Cmd.map WrappedTransactionMsg (Transaction.newBlockCmd blockNumber network model.transactionState)
                                , Cmd.map WrappedTokenMsg (tokenNewBlockCmd config model.tokenState blockNumber model.account)
-                               , Cmd.map WrappedCompoundMsg (compoundNewBlockCmd blockNumber apiBaseUrlMap network config.comptroller model.account config)
+                               , Cmd.map WrappedGroveMsg (groveNewBlockCmd blockNumber apiBaseUrlMap network config.comptroller model.account config)
                                ]
 
                 _ ->
@@ -411,7 +412,7 @@ handleUpdatesFromEthConnectedWallet maybeConfig connectedEthWalletMsg model =
             ( { model | network = Nothing }, Cmd.none )
 
         ConnectedEthWallet.SetAccount Nothing ->
-            ( { model | account = NoAccount, compoundState = clearCompoundState model.compoundState }, Cmd.none )
+            ( { model | account = NoAccount, groveState = clearGroveState model.groveState }, Cmd.none )
 
         ConnectedEthWallet.SetAccount (Just newAccount) ->
             let
@@ -425,13 +426,13 @@ handleUpdatesFromEthConnectedWallet maybeConfig connectedEthWalletMsg model =
                     case ( model.account, model.blockNumber ) of
                         ( Acct existingAccount _, Just currentBlockNumber ) ->
                             if Ethereum.getCustomerAddressString existingAccount /= Ethereum.getCustomerAddressString newAccount then
-                                ( True, { newAccountModel | compoundState = clearCompoundState model.compoundState, tokenState = clearTokenState model.tokenState } )
+                                ( True, { newAccountModel | groveState = clearGroveState model.groveState, tokenState = clearTokenState model.tokenState } )
 
                             else
                                 ( False, newAccountModel )
 
                         ( NoAccount, _ ) ->
-                            ( True, { newAccountModel | compoundState = clearCompoundState model.compoundState, tokenState = clearTokenState model.tokenState } )
+                            ( True, { newAccountModel | groveState = clearGroveState model.groveState, tokenState = clearTokenState model.tokenState } )
 
                         _ ->
                             ( False, newAccountModel )
@@ -458,7 +459,7 @@ handleUpdatesFromEthConnectedWallet maybeConfig connectedEthWalletMsg model =
                                     Cmd.none
 
                         Admin ->
-                            Admin.getQueuedTransactions model.configs model.network
+                            Cmd.none
 
                         _ ->
                             Cmd.none
@@ -523,7 +524,7 @@ handleUpdatesFromEthConnectedWallet maybeConfig connectedEthWalletMsg model =
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg ({ page, configs, apiBaseUrlMap, account, transactionState, bnTransactionState, tokenState, compoundState, oracleState, network } as model) =
+update msg ({ page, configs, apiBaseUrlMap, account, transactionState, bnTransactionState, tokenState, groveState, oracleState, network } as model) =
     let
         maybeConfig =
             getCurrentConfig model
@@ -541,17 +542,17 @@ update msg ({ page, configs, apiBaseUrlMap, account, transactionState, bnTransac
                     [ setTitle (getPageTitle model.userLanguage newPage)
                     , case newPage of
                         Admin ->
-                            Admin.getQueuedTransactions configs network
+                            Cmd.none
 
                         Vote ->
                             case ( maybeConfig, model.blockNumber ) of
                                 ( Just config, Just blockNumber ) ->
                                     Cmd.batch
-                                        [ Vote.getVoteDashboardData configs network model.blockNumber account
+                                        [ Vote.getVoteDashboardData configs network (Just blockNumber) account
                                         ]
 
                                 _ ->
-                                    Vote.getVoteDashboardData configs network model.blockNumber account
+                                    Cmd.none
 
                         _ ->
                             Cmd.none
@@ -587,7 +588,7 @@ update msg ({ page, configs, apiBaseUrlMap, account, transactionState, bnTransac
         ClaimCompModalMsg claimCompModalInternalMsg ->
             let
                 ( updatedClaimCompModalState, updatedClaimCompModalCmd ) =
-                    ClaimCompModal.update claimCompModalInternalMsg maybeConfig account model.compoundState model.claimCompModalState
+                    ClaimCompModal.update claimCompModalInternalMsg maybeConfig account model.groveState model.claimCompModalState
             in
             ( { model | claimCompModalState = updatedClaimCompModalState }, Cmd.map claimCompModalTranslator updatedClaimCompModalCmd )
 
@@ -714,7 +715,7 @@ update msg ({ page, configs, apiBaseUrlMap, account, transactionState, bnTransac
                 ( updatedPrimaryActionModal, cmd ) =
                     case model.primaryActionModalState of
                         Just activeActionModalState ->
-                            DappInterface.PrimaryActionModal.update model.account compoundState tokenState oracleState internal activeActionModalState
+                            DappInterface.PrimaryActionModal.update model.account groveState tokenState oracleState internal activeActionModalState
                                 |> Tuple.mapBoth Just (Cmd.map primaryActionModalTranslator)
 
                         Nothing ->
@@ -746,8 +747,8 @@ update msg ({ page, configs, apiBaseUrlMap, account, transactionState, bnTransac
                 ( updatedVoteModel, loadDelegateeCmd ) =
                     Vote.handleShouldLoadCurrentDelegatee apiBaseUrlMap model.network model.account model.governanceState model.voteModel
 
-                updateCompoundState =
-                    Eth.Compound.handleAccountLiquidityCalculation oracleState compoundState
+                updateGroveState =
+                    Eth.Grove.handleAccountLiquidityCalculation oracleState groveState
 
                 canCheckForPendingTrxs =
                     let
@@ -784,7 +785,7 @@ update msg ({ page, configs, apiBaseUrlMap, account, transactionState, bnTransac
                 , lastNewBlockTime = lastNewBlockTimestamp
                 , borrowingContainerState = updatedBorrowingContainerState
                 , voteModel = updatedVoteModel
-                , compoundState = updateCompoundState
+                , groveState = updateGroveState
               }
             , Cmd.batch
                 [ Cmd.map voteTranslator loadDelegateeCmd
@@ -821,12 +822,14 @@ update msg ({ page, configs, apiBaseUrlMap, account, transactionState, bnTransac
             ( model, Cmd.none )
 
         SetBlockNumber blockNumber ->
-            ( { model
-                | blockNumber = Just blockNumber
-                , lastNewBlockTime = model.currentTime
-              }
-            , newBlockCmd apiBaseUrlMap model.network blockNumber model.blockNumber model
-            )
+            let
+                _ =
+                    Debug.log "Setting block number" blockNumber
+
+                newModel =
+                    { model | blockNumber = Just blockNumber }
+            in
+            ( newModel, newBlockCmd apiBaseUrlMap model.network blockNumber model.blockNumber model )
 
         WrappedTransactionMsg transactionMsg ->
             let
@@ -967,22 +970,22 @@ update msg ({ page, configs, apiBaseUrlMap, account, transactionState, bnTransac
                 ]
             )
 
-        WrappedCompoundMsg compoundMsg ->
+        WrappedGroveMsg groveMsg ->
             let
-                ( ( updatedCompoundState, compoundCmd ), ( updatedBNState, bnCmd ) ) =
+                ( ( updatedGroveState, groveCmd ), ( updatedBNState, bnCmd ) ) =
                     case maybeConfig of
                         Just config ->
-                            compoundUpdate config tokenState oracleState compoundMsg ( compoundState, bnTransactionState )
+                            groveUpdate config tokenState oracleState groveMsg ( groveState, bnTransactionState )
 
                         Nothing ->
-                            ( ( model.compoundState, Cmd.none )
+                            ( ( model.groveState, Cmd.none )
                             , ( model.bnTransactionState, Cmd.none )
                             )
 
                 updatedCollateralToggleModal =
                     case model.collateralToggleModalState of
                         Just activeCollateralToggleModal ->
-                            CollateralToggleModal.handleCompoundUpdate compoundMsg activeCollateralToggleModal
+                            CollateralToggleModal.handleGroveUpdate groveMsg activeCollateralToggleModal
                                 |> Just
 
                         Nothing ->
@@ -992,29 +995,29 @@ update msg ({ page, configs, apiBaseUrlMap, account, transactionState, bnTransac
                 updatedPrimaryActionModal =
                     case model.primaryActionModalState of
                         Just activeActionModalState ->
-                            DappInterface.PrimaryActionModal.handleCompoundUpdate compoundMsg activeActionModalState
+                            DappInterface.PrimaryActionModal.handleGroveUpdate groveMsg activeActionModalState
                                 |> Just
 
                         Nothing ->
                             Nothing
 
                 ( updatedTransactionState, transactionCmds ) =
-                    case compoundMsg of
+                    case groveMsg of
                         SetAccountLimits _ ->
-                            Transaction.handleTrxCountPruning network account updatedCompoundState.maybeTrxCount transactionState
+                            Transaction.handleTrxCountPruning network account updatedGroveState.maybeTrxCount transactionState
 
                         _ ->
                             ( transactionState, Cmd.none )
             in
             ( { model
-                | compoundState = updatedCompoundState
+                | groveState = updatedGroveState
                 , collateralToggleModalState = updatedCollateralToggleModal
                 , primaryActionModalState = updatedPrimaryActionModal
                 , transactionState = updatedTransactionState
                 , bnTransactionState = updatedBNState
               }
             , Cmd.batch
-                [ Cmd.map WrappedCompoundMsg compoundCmd
+                [ Cmd.map WrappedGroveMsg groveCmd
                 , Cmd.map WrappedTransactionMsg transactionCmds
                 , bnCmd
                 ]
@@ -1157,7 +1160,7 @@ view ({ userLanguage } as model) =
 
 
 viewFull : Model -> List (Html Msg)
-viewFull ({ page, liquidateModel, transactionState, compoundState, tokenState, oracleState, configs, configAbis, network, preferences, account, blockNumber, userLanguage } as model) =
+viewFull ({ page, liquidateModel, transactionState, groveState, tokenState, oracleState, configs, configAbis, network, preferences, account, blockNumber, userLanguage } as model) =
     let
         maybeConfig =
             getCurrentConfig model
@@ -1177,7 +1180,7 @@ viewFull ({ page, liquidateModel, transactionState, compoundState, tokenState, o
     case page of
         Liquidate ->
             [ header
-            , Html.map liquidateTranslator (Liquidate.view userLanguage model.currentTimeZone maybeConfig network account compoundState tokenState oracleState preferences transactionState liquidateModel)
+            , Html.map liquidateTranslator (Liquidate.view userLanguage model.currentTimeZone maybeConfig network account groveState tokenState oracleState preferences transactionState liquidateModel)
             , chooseWalletModal userLanguage model
             , claimCompView
             , footer
@@ -1187,7 +1190,7 @@ viewFull ({ page, liquidateModel, transactionState, compoundState, tokenState, o
         Admin ->
             [ alertView model
             , header
-            , Html.map adminTranslator (Admin.view userLanguage configs configAbis account network model.currentTimeZone model.currentTime model.adminModel)
+            , Html.map adminTranslator (Admin.view userLanguage configs configAbis account network model.adminModel)
             , chooseWalletModal userLanguage model
             , claimCompView
             , footer
@@ -1272,7 +1275,7 @@ alertView ({ account, maybeGasPrice, network, userLanguage } as model) =
                                 False
                 in
                 case ( network, hasZeroEthBalance, maybeGasPrice ) of
-                    ( Just MainNet, _, Just gasPrice ) ->
+                    ( Just Xrplevm, _, Just gasPrice ) ->
                         highGasAlert userLanguage gasPrice
 
                     ( Just testNet, True, _ ) ->
@@ -1414,12 +1417,12 @@ refreshLatestGasPrice : Dict String String -> Network -> Cmd Msg
 refreshLatestGasPrice apiBaseUrlMap network =
     let
         maybeGasPriceUrl =
-            CompoundApi.GasService.Urls.getGasPriceUrl apiBaseUrlMap network
+            GroveApi.GasService.Urls.getGasPriceUrl apiBaseUrlMap network
 
         getGasPriceCmd =
             case maybeGasPriceUrl of
                 Just getGasPriceUrl ->
-                    Http.send RefreshGasPrice (Http.get getGasPriceUrl CompoundApi.GasService.Decoders.gasPriceResponseDecoder)
+                    Http.send RefreshGasPrice (Http.get getGasPriceUrl GroveApi.GasService.Decoders.gasPriceResponseDecoder)
 
                 _ ->
                     Cmd.none
@@ -1442,7 +1445,7 @@ subscriptions model =
         , Sub.map WrappedTransactionMsg (Transaction.subscriptions model.transactionState)
         , Sub.map WrappedBNTransactionMsg BNTransaction.subscriptions
         , Sub.map WrappedTokenMsg (tokenSubscriptions model.tokenState)
-        , Sub.map WrappedCompoundMsg compoundSubscriptions
+        , Sub.map WrappedGroveMsg groveSubscriptions
         , Sub.map WrappedOracleMsg (oracleSubscriptions model.oracleState)
         , Sub.map WrappedPreferencesMsg (preferencesSubscriptions model.preferences)
         , Sub.map liquidateTranslator Liquidate.subscriptions
@@ -1451,8 +1454,8 @@ subscriptions model =
         , Sub.map proposeTranslator (Propose.subscriptions model.proposeModel)
         , Sub.map voteTranslator (Vote.subscriptions model.voteModel)
         , Sub.map WrappedGovernanceMsg Eth.Governance.subscriptions
-        , Time.every (1000.0 * 1.0 * toFloat CompoundComponents.Utils.Time.seconds) Tick
-        , Time.every (1000.0 * 4.0 * toFloat CompoundComponents.Utils.Time.hours) CheckVersion
+        , Time.every (1000.0 * 1.0 * toFloat GroveComponents.Utils.Time.seconds) Tick
+        , Time.every (1000.0 * 4.0 * toFloat GroveComponents.Utils.Time.hours) CheckVersion
         , onUrlChange (Url.fromString >> UrlChange)
         ]
 

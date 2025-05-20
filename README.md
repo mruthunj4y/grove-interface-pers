@@ -1,12 +1,12 @@
-![Build & Push to IPFS](https://github.com/compound-finance/palisade/actions/workflows/build-workflow.yml/badge.svg)
+![Build & Push to IPFS](https://github.com/grove-finance/palisade/actions/workflows/build-workflow.yml/badge.svg)
 
-# Compound Web3 Front-end
+# grove Web3 Front-end
 
-Palisade is the web3 front-end experience to interact with the Compound Ethereum protocol.
+Palisade is the web3 front-end experience to interact with the grove Ethereum protocol.
 
 ## Contributing
 
-We welcome contributions from the community to help keep the Compound web3 front-end working great. You can read more here about [how to contribute](CONTRIBUTING.md).
+We welcome contributions from the community to help keep the grove web3 front-end working great. You can read more here about [how to contribute](CONTRIBUTING.md).
 
 ## Configuration
 
@@ -24,7 +24,7 @@ The following is an example configuration file:
 ```json
 {
   "API_BASE_URL_MAP": {
-    "v3_api": "https://v3-api.compound.finance/"
+    "v3_api": "https://v3-api.grove.finance/"
   },
   "DATA_PROVIDERS": {
     "development": "http://localhost:8545",
@@ -32,36 +32,36 @@ The following is an example configuration file:
     "rinkeby": "https://rinkeby.infura.io/v3/YOUR-PROJECT-ID",
     "kovan": "https://kovan.infura.io/v3/YOUR-PROJECT-ID",
     "ropsten": "https://ropsten.infura.io/v3/YOUR-PROJECT-ID",
-    "mainnet": "https://mainnet.infura.io/v3/YOUR-PROJECT-ID"
+    "xrplevm": "https://xrplevm.infura.io/v3/YOUR-PROJECT-ID"
   },
   "NETWORK_MAP": {
-    "mainnet": 1,
+    "xrplevm": 1,
     "ropsten": 3,
     "rinkeby": 4,
     "goerli": 5,
     "kovan": 42,
     "development": 999
   },
-  "DEFAULT_NETWORK": "mainnet",
+  "DEFAULT_NETWORK": "xrplevm",
   "WALLET_CONNECT_PROJECT_ID": "YOUR_WALLET_CONNECT_PROJECT_ID"
 }
 ```
 
 Each of the top level keys have the following functions:
 
-- `API_BASE_URL_MAP` - Object mapping of Eth network name as key and value being the desired Compound Api host. This can be left as is.
+- `API_BASE_URL_MAP` - Object mapping of Eth network name as key and value being the desired grove Api host. This can be left as is.
 - `DATA_PROVIDERS` - Object mapping of Eth network name as key and value being the url of a corresponding JSON RPC host. This example shows Infura as a sample JSON RPC provider and you can find more information [here](https://infura.io/docs/ethereum). Note: this can be specified by setting in the env var `DATA_PROVIDERS` as JSON (e.g. `export DATA_PROVIDERS='{"rinkeby": "https://infura.io/..."}'`).
 - `NETWORK_MAP` - Object mapping of Eth network name as key and value being the corresponding NetworkId value. This can be left as is.
 - `WALLET_CONNECT_PROJECT_ID` - Wallect Connect Project Id required to use Wallet Connect as a wallet type in the app. You can find more information [here](https://docs.walletconnect.com/2.0/). Note: this can be specified by setting the env var `WALLET_CONNECT_PROJECT_ID`. This id is not required unless you want to enable wallet connect usage.
 
 ## Getting Started
 
-The Compound web3 front-end is written in [elm](http://elm-lang.org/) and was bootstrapped with [create elm app](https://github.com/halfzebra/create-elm-app). We strongly recommmend getting familiar with the Elm framework before jumping into the Compound source code.
+The grove web3 front-end is written in [elm](http://elm-lang.org/) and was bootstrapped with [create elm app](https://github.com/halfzebra/create-elm-app). We strongly recommmend getting familiar with the Elm framework before jumping into the grove source code.
 
 To get started, first clone this repo:
 
 ```bash
-> git clone https://github.com/compound-finance/palisade.git && cd palisade
+> git clone https://github.com/grove-finance/palisade.git && cd palisade
 ```
 
 Next, install yarn dependencies (note, you should not use `npm` intsead of `yarn` during `install` because `npm` does not respect `yarn.lock` but you should be able to use `npm` for the other commands.):
@@ -134,7 +134,7 @@ Note: The `deploy-ipfs` script has been tested and used with Infura IPFS. You ma
 
 ### Google Cloud Storage
 
-To deploy the Compound web3 front-end to Google Cloud Storage, you should be familar with [Hosting a Static Site](https://cloud.google.com/storage/docs/hosting-static-website) on Google Cloud. Follow the instructions on creating a CNAME record with your DNS provider and creating a fully-public bucket. Also, make sure to have the [Cloud SDK](https://cloud.google.com/sdk/) tools installed, that you're logged in via `gcloud auth`, and that you have [your correct project set](https://cloud.google.com/sdk/gcloud/reference/config/set).
+To deploy the grove web3 front-end to Google Cloud Storage, you should be familar with [Hosting a Static Site](https://cloud.google.com/storage/docs/hosting-static-website) on Google Cloud. Follow the instructions on creating a CNAME record with your DNS provider and creating a fully-public bucket. Also, make sure to have the [Cloud SDK](https://cloud.google.com/sdk/) tools installed, that you're logged in via `gcloud auth`, and that you have [your correct project set](https://cloud.google.com/sdk/gcloud/reference/config/set).
 
 To deploy to a gcloud bucket:
 
@@ -148,10 +148,10 @@ To learn more about internationalization, please view [i18n.md](i18n.md).
 
 ## Discussion
 
-For any concerns with the web3 front-end, open an issue or visit us on [Discord](https://discord.com/invite/compound) to discuss.
+For any concerns with the web3 front-end, open an issue or visit us on [Discord](https://discord.com/invite/grove) to discuss.
 
 # License
 
-Copyright 2022, Compound Labs, Inc. and repository contributors. This repository is licensed under GPLv3 (please see [LICENSE](/LICENSE) for the full-text of the license).
+Copyright 2022, grove Labs, Inc. and repository contributors. This repository is licensed under GPLv3 (please see [LICENSE](/LICENSE) for the full-text of the license).
 
 All contributors to this repository must release contributed code under this GPLv3 license, free of any other encumbrance. Contributors also agree that contributions may be re-licensed under MIT or BSD-3 licenses in the future without notice. In such instances, all copyright notices will be retained.

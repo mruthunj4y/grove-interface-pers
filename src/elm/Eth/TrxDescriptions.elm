@@ -3,10 +3,10 @@ module Eth.TrxDescriptions exposing
     , describeTransaction
     )
 
-import CompoundComponents.Eth.Ethereum exposing (ContractAddress(..))
-import CompoundComponents.Eth.TokenMath as TokenMath
-import CompoundComponents.Functions exposing (default)
-import CompoundComponents.Utils.NumberFormatter exposing (formatTokenBalance)
+import GroveComponents.Eth.Ethereum exposing (ContractAddress(..))
+import GroveComponents.Eth.TokenMath as TokenMath
+import GroveComponents.Functions exposing (default)
+import GroveComponents.Utils.NumberFormatter exposing (formatTokenBalance)
 import Decimal exposing (Decimal)
 import Eth.Token exposing (CTokenSet, getUnderlyingTokenDecimals, getUnderlyingTokenSymbol)
 import Strings.Translations as Translations
@@ -73,17 +73,17 @@ describeTransaction userLanguage cTokens contract function args =
     case contract of
         Contract contractAddress ->
             case function of
-                "allocate" ->
-                    case args of
-                        [ cTokenAddress, amountWei ] ->
-                            let
-                                ( tokenSymbol, amount ) =
-                                    tokenDetails cTokens cTokenAddress amountWei
-                            in
-                            Just (Translations.faucet userLanguage ++ " " ++ amount ++ " " ++ tokenSymbol)
+                -- "allocate" ->
+                --     case args of
+                --         [ cTokenAddress, amountWei ] ->
+                --             let
+                --                 ( tokenSymbol, amount ) =
+                --                     tokenDetails cTokens cTokenAddress amountWei
+                --             in
+                --             Just (Translations.faucet userLanguage ++ " " ++ amount ++ " " ++ tokenSymbol)
 
-                        _ ->
-                            Just (Translations.faucet_tokens userLanguage)
+                --         _ ->
+                --             Just (Translations.faucet_tokens userLanguage)
 
                 "approve" ->
                     case args of
@@ -157,17 +157,17 @@ describeTransaction userLanguage cTokens contract function args =
                         _ ->
                             Just (Translations.pay_back_borrowed_tokens userLanguage)
 
-                "repayBehalf" ->
-                    case args of
-                        [ cTokenAddress, amountWei ] ->
-                            let
-                                ( tokenSymbol, amount ) =
-                                    tokenDetails cTokens cTokenAddress amountWei
-                            in
-                            Just (Translations.repay userLanguage ++ " " ++ amount ++ " " ++ tokenSymbol)
+                -- "repayBehalf" ->
+                --     case args of
+                --         [ cTokenAddress, amountWei ] ->
+                --             let
+                --                 ( tokenSymbol, amount ) =
+                --                     tokenDetails cTokens cTokenAddress amountWei
+                --             in
+                --             Just (Translations.repay userLanguage ++ " " ++ amount ++ " " ++ tokenSymbol)
 
-                        _ ->
-                            Just (Translations.pay_back_borrowed_tokens userLanguage)
+                --         _ ->
+                --             Just (Translations.pay_back_borrowed_tokens userLanguage)
 
                 "liquidateBorrow" ->
                     case args of

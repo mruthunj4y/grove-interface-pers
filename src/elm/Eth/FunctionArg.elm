@@ -1,7 +1,7 @@
 module Eth.FunctionArg exposing (FunctionArg, buildFunctionArg, setArg)
 
 import Array exposing (Array)
-import CompoundComponents.Eth.Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), getContractAddressString, isValidAddress)
+import GroveComponents.Eth.Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), getContractAddressString, isValidAddress)
 import Decimal
 import Json.Decode exposing (Value)
 import Json.Encode

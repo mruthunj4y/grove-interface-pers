@@ -1,6 +1,6 @@
 module Source.Infura exposing (ethereumApiUrl, loadEtherPrice)
 
-import CompoundComponents.Eth.Decoders exposing (decimal)
+import GroveComponents.Eth.Decoders exposing (decimal)
 import Decimal exposing (Decimal)
 import Http
 import Json.Decode exposing (Decoder, field)

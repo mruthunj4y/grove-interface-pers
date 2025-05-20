@@ -29,30 +29,31 @@ port module Eth.Transaction exposing
     , view
     )
 
-import CompoundComponents.Console as Console
-import CompoundComponents.Eth.Decoders exposing (decodeAssetAddress, decodeContractAddress, decodeCustomerAddress, decodeNetwork, decodeTrxHash, forceMaybe)
-import CompoundComponents.Eth.Ethereum as Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), EtherscanLinkValue(..), TrxHash, etherscanLink)
-import CompoundComponents.Eth.Network exposing (Network(..), networkId)
-import CompoundComponents.Ether.Address
-import CompoundComponents.Ether.BNTransaction as BNTransaction exposing (BNTransactionState)
-import CompoundComponents.Ether.Hex as Hex exposing (Hex)
-import CompoundComponents.Functions exposing (default, demaybeify, handleError)
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (class, id)
-import CompoundComponents.Utils.Time
 import DateFormat
 import Dict exposing (Dict)
 import Eth.Config exposing (Config)
 import Eth.Token exposing (CToken, CTokenSet, Token)
 import Eth.TrxDescriptions exposing (describeGracefulFailure, describeTransaction)
+import GroveComponents.Console as Console
+import GroveComponents.Eth.Decoders exposing (decodeAssetAddress, decodeContractAddress, decodeCustomerAddress, decodeNetwork, decodeTrxHash, forceMaybe)
+import GroveComponents.Eth.Ethereum as Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), EtherscanLinkValue(..), TrxHash, etherscanLink)
+import GroveComponents.Eth.Network exposing (Network(..), networkId)
+import GroveComponents.Ether.Address
+import GroveComponents.Ether.BNTransaction as BNTransaction exposing (BNTransactionState)
+import GroveComponents.Ether.Hex as Hex exposing (Hex)
+import GroveComponents.Functions exposing (default, demaybeify, handleError)
+import GroveComponents.Utils.GroveHtmlAttributes exposing (class, id)
+import GroveComponents.Utils.Time
 import Html exposing (Html, a, div, h4, label, li, span, text, ul)
 import Json.Decode exposing (decodeValue, field, succeed)
 import Strings.Translations as Translations
 import Time exposing (Posix)
+import Debug
 
 
 pendingTrxWaitTimeMs : Int
 pendingTrxWaitTimeMs =
-    CompoundComponents.Utils.Time.hours * 2 * 1000
+    GroveComponents.Utils.Time.hours * 2 * 1000
 
 
 type TransactionStatus
@@ -63,8 +64,7 @@ type TransactionStatus
 
 
 type TransactionType
-    = Faucet
-    | Enable
+    = Enable
     | Supply
     | Withdraw
     | Borrow
@@ -133,6 +133,7 @@ update maybeNetwork account bnTransactionState msg ({ transactions } as state) =
     case msg of
         NewTransaction transaction ->
             let
+                _ = Debug.log "NewTransaction" transaction
                 -- The ports handle populating the expected value with userTrxCount+1 so here
                 -- we should check what our local model thinks is the highest nonce and use that instead when
                 -- we store the transaction.
@@ -151,15 +152,36 @@ update maybeNetwork account bnTransactionState msg ({ transactions } as state) =
             ( { state | transactions = appendTransaction nonceUpdatedTransaction transactions }, storeTransaction nonceUpdatedTransaction )
 
         SetTransactions newTransactions ->
+            let
+                _ = Debug.log "SetTransactions" newTransactions
+            in
             ( { state | transactions = sortedTransactions newTransactions }, Cmd.none )
 
         UpdateTransaction { trxHash, transactionStatus, error, trxNonce } ->
+            let
+                _ = Debug.log "UpdateTransaction" 
+                    { trxHash = trxHash
+                    , transactionStatus = transactionStatus
+                    , error = error
+                    , trxNonce = trxNonce
+                    }
+            in
             ( { state | transactions = updateTransaction trxHash transactionStatus error trxNonce transactions }, storeTransactionUpdate trxHash transactionStatus error )
 
         ClearTransactions ->
+            let
+                _ = Debug.log "ClearTransactions" ()
+            in
             ( { state | transactions = [] }, askClearTransactions )
 
         NewNonBNTransaction { txModule, txId, txHash } ->
+            let
+                _ = Debug.log "NewNonBNTransaction" 
+                    { txModule = txModule
+                    , txId = txId
+                    , txHash = txHash
+                    }
+            in
             let
                 maybeFoundBNTransaction =
                     bnTransactionState.transactions
@@ -183,6 +205,9 @@ update maybeNetwork account bnTransactionState msg ({ transactions } as state) =
                     ( state, Cmd.none )
 
         Error error ->
+            let
+                _ = Debug.log "Transaction Error" error
+            in
             ( { state | errors = error :: state.errors }, Console.error error )
 
 
@@ -375,7 +400,7 @@ appendTransaction transaction listOfTransactions =
 getDefaultOldestPendingTrxTime : Maybe Time.Posix -> Maybe Time.Posix
 getDefaultOldestPendingTrxTime maybeCurrentTime =
     maybeCurrentTime
-        |> Maybe.map (\time -> CompoundComponents.Utils.Time.subtractMilliFromPosix time pendingTrxWaitTimeMs)
+        |> Maybe.map (\time -> GroveComponents.Utils.Time.subtractMilliFromPosix time pendingTrxWaitTimeMs)
 
 
 convertBNTransactionToTransaction : BNTransaction.Transaction -> Maybe Transaction
@@ -417,8 +442,8 @@ convertBNTransactionToTransaction bnTransaction =
             { trxHash = Hex.toString actualTXHash
             , network = bnTransaction.network
             , timestamp = actualTime
-            , contract = Contract (CompoundComponents.Ether.Address.toString bnTransaction.toAddress)
-            , customer = Customer (CompoundComponents.Ether.Address.toString bnTransaction.fromAddress)
+            , contract = Contract (GroveComponents.Ether.Address.toString bnTransaction.toAddress)
+            , customer = Customer (GroveComponents.Ether.Address.toString bnTransaction.fromAddress)
             , function = bnTransaction.function
             , args = bnTransaction.args
             , status = txStatusFromBNTxStatus
@@ -608,12 +633,6 @@ transactionStatusId status =
 getTransactionType : Transaction -> TransactionType
 getTransactionType transaction =
     case transaction.function of
-        "allocate" ->
-            Faucet
-
-        "drip" ->
-            Faucet
-
         "approve" ->
             Enable
 
@@ -690,26 +709,13 @@ filteredTransactionsByCToken transactions config network customerAddress cTokens
                             underlyingAddress =
                                 Ethereum.assetAddressToContractAddress selectedToken.underlying.assetAddress
 
-                            isCEther =
-                                selectedToken.contractAddress == config.cEtherToken.address
-
                             cTokenAddressString =
                                 Ethereum.getContractAddressString selectedToken.contractAddress
-
-                            isFaucetingTrx =
-                                case config.maybeFauceteer of
-                                    Just fauceteer ->
-                                        transaction.contract == fauceteer && Just cTokenAddressString == List.head transaction.args
-
-                                    Nothing ->
-                                        False
                         in
                         (transaction.contract == selectedToken.contractAddress)
                             || (transaction.contract == underlyingAddress)
-                            || (isCEther && transaction.contract == config.maximillion)
                             || (transaction.function == "exitMarket" && [ cTokenAddressString ] == transaction.args)
                             || (transaction.function == "enterMarkets" && [ cTokenAddressString ] == transaction.args)
-                            || isFaucetingTrx
                        )
             )
 

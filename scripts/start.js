@@ -155,7 +155,7 @@ buildI18n().then(() => {
       // Create a webpack compiler that is configured with custom messages.
       const compiler = createCompiler(webpack, config, appName, urls);
 
-      fs.copySync(paths.componentsPath, path.join(paths.appPublic, 'compound-components'), {
+      fs.copySync(paths.componentsPath, path.join(paths.appPublic, 'grove-components'), {
         dereference: true,
         filter: (file) => file !== paths.appHtml,
       });

@@ -16,23 +16,23 @@ port module DappInterface.Vote exposing
     , view
     )
 
-import CompoundApi.Governance.AccountService.Decoders exposing (governanceAccountResponseDecoder, governanceAccountSearchResponseDecoder)
-import CompoundApi.Governance.AccountService.Models exposing (GovernanceAccountResponse, GovernanceAccountSearchResponse)
-import CompoundApi.Governance.AccountService.Urls exposing (governanceAccountRequestUrl, governanceAccountSearchRequestUrl)
-import CompoundApi.Governance.Common.Models exposing (CompAccount)
-import CompoundApi.Governance.ProposalService.Decoders exposing (proposalWithDetailDecoder)
-import CompoundApi.Governance.ProposalService.Models as ProposalServiceModels exposing (ProposalState, ProposalStateEnum(..), ProposalWithDetail)
-import CompoundComponents.Console as Console
-import CompoundComponents.DisplayCurrency exposing (DisplayCurrency(..))
-import CompoundComponents.Eth.Decoders exposing (decimal)
-import CompoundComponents.Eth.Ethereum as Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), EtherscanLinkValue(..), getContractAddressString, getCustomerAddressString, isValidAddress, shortenedAddressString, zeroAddress)
-import CompoundComponents.Eth.Ledger exposing (intToLedgerAccount)
-import CompoundComponents.Eth.Network exposing (Network(..), networkName)
-import CompoundComponents.Functions exposing (handleError)
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (HrefLinkType(..), class, href, id, onClickStopPropagation, placeholder, src, style, target, type_)
-import CompoundComponents.Utils.Markup exposing (disabled)
-import CompoundComponents.Utils.NumberFormatter exposing (formatPercentage, formatPercentageToNearestWhole, formatToDecimalPlaces, formatTokenBalance)
-import CompoundComponents.Utils.Time
+import GroveApi.Governance.AccountService.Decoders exposing (governanceAccountResponseDecoder, governanceAccountSearchResponseDecoder)
+import GroveApi.Governance.AccountService.Models exposing (GovernanceAccountResponse, GovernanceAccountSearchResponse)
+import GroveApi.Governance.AccountService.Urls exposing (governanceAccountRequestUrl, governanceAccountSearchRequestUrl)
+import GroveApi.Governance.Common.Models exposing (CompAccount)
+import GroveApi.Governance.ProposalService.Decoders exposing (proposalWithDetailDecoder)
+import GroveApi.Governance.ProposalService.Models as ProposalServiceModels exposing (ProposalState, ProposalStateEnum(..), ProposalWithDetail)
+import GroveComponents.Console as Console
+import GroveComponents.DisplayCurrency exposing (DisplayCurrency(..))
+import GroveComponents.Eth.Decoders exposing (decimal)
+import GroveComponents.Eth.Ethereum as Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), EtherscanLinkValue(..), getContractAddressString, getCustomerAddressString, isValidAddress, shortenedAddressString, zeroAddress)
+import GroveComponents.Eth.Ledger exposing (intToLedgerAccount)
+import GroveComponents.Eth.Network exposing (Network(..), networkName)
+import GroveComponents.Functions exposing (handleError)
+import GroveComponents.Utils.GroveHtmlAttributes exposing (HrefLinkType(..), class, href, id, onClickStopPropagation, placeholder, src, style, target, type_)
+import GroveComponents.Utils.Markup exposing (disabled)
+import GroveComponents.Utils.NumberFormatter exposing (formatPercentage, formatPercentageToNearestWhole, formatToDecimalPlaces, formatTokenBalance)
+import GroveComponents.Utils.Time
 import DappInterface.CommonViews exposing (compOrVoteBalanceSpan)
 import DappInterface.Page exposing (Page(..), getHrefUrl)
 import Debounce exposing (Debounce)
@@ -44,7 +44,7 @@ import Eth.Governance
         ( DelegatedAddress(..)
         , GovernanceMsg(..)
         , GovernanceState
-        , getCompoundGovernanceTokenBalance
+        , getGroveGovernanceTokenBalance
         , getCurrentVotes
         , getDelegatedAddress
         , getDelegatedAddressString
@@ -389,10 +389,8 @@ handleTransactionUpdate maybeConfig maybeNetwork account transactionState transa
                                                 && (model.approveCAPState == AwaitingConfirmApproveCAPTransaction)
                                         then
                                             { model | approveCAPState = AwaitingApproveCAPTransactionMined }
-
                                         else
                                             model
-
                                     Nothing ->
                                         model
                         in
@@ -411,7 +409,6 @@ handleTransactionUpdate maybeConfig maybeNetwork account transactionState transa
                     in
                     if model.approveCAPState == AwaitingApproveCAPTransactionMined && pendingApproveCAPTransaction == Nothing then
                         { model | approveCAPState = ApproveCAPModalNotShown }
-
                     else
                         model
 
@@ -474,7 +471,7 @@ update internalMsg maybeConfig maybeNetwork apiBaseUrlMap account model =
                                 data.proposals
                                     |> List.filter
                                         (\proposal ->
-                                            if network == Ropsten then
+                                            if network == Xrplevm then
                                                 True
 
                                             else
@@ -483,15 +480,15 @@ update internalMsg maybeConfig maybeNetwork apiBaseUrlMap account model =
                                     |> List.sortBy .id
                                     |> List.reverse
 
-                            fixedV3MainnetProposals =
-                                if network == MainNet then
+                            fixedV3XrplevmProposals =
+                                if network == Xrplevm then
                                     sortedProposals
                                     |> List.foldl
                                         (\proposal acc ->
                                             let
                                                 updatedProposal =
                                                     if proposal.id == 116 then
-                                                        { proposal | title = "Initialize Compound III (USDC on Ethereum)"}
+                                                        { proposal | title = "Initialize Grove III (USDC on Ethereum)"}
                                                     else if proposal.id == 119 then
                                                         { proposal | title = "Oracle Update"}
                                                     else
@@ -505,7 +502,7 @@ update internalMsg maybeConfig maybeNetwork apiBaseUrlMap account model =
                                 else
                                     sortedProposals
                         in
-                        ( { model | proposals = Just fixedV3MainnetProposals, proposalVoteReceipts = data.proposalVoteReceipts, priorVotes = data.priorVotes }, Cmd.none )
+                        ( { model | proposals = Just fixedV3XrplevmProposals, proposalVoteReceipts = data.proposalVoteReceipts, priorVotes = data.priorVotes }, Cmd.none )
 
                     else
                         ( model, Cmd.none )
@@ -616,14 +613,9 @@ update internalMsg maybeConfig maybeNetwork apiBaseUrlMap account model =
                 voteCmd =
                     case voteModalState of
                         ConfirmVoteType proposal voteType reason ->
-                            case ( maybeConfig, account ) of
-                                ( Just config, Acct accountAddress _ ) ->
-                                    case config.maybeGovernor of
-                                        Just ( governorAddress, isBravo ) ->
-                                            voteProposal accountAddress (getContractAddressString governorAddress) isBravo proposal.id voteType reason
-
-                                        _ ->
-                                            Cmd.none
+                            case account of
+                                Acct accountAddress _ ->
+                                    voteProposal accountAddress "" False proposal.id voteType reason
 
                                 _ ->
                                     Cmd.none
@@ -731,17 +723,9 @@ update internalMsg maybeConfig maybeNetwork apiBaseUrlMap account model =
 handleTokenUpdate : Config -> TokenMsg -> Model -> Model
 handleTokenUpdate config tokenMsg model =
     case tokenMsg of
-        Eth.Token.Web3TransactionMsg (Eth.Token.FaucetTokenApprove network possibleCapFactoryAddress possibleCompAddress _ _) ->
-            case config.maybeCrowdProposalFactory of
-                Just capFactory ->
-                    if possibleCapFactoryAddress == capFactory then
-                        { model | approveCAPState = AwaitingConfirmApproveCAPTransaction }
-
-                    else
-                        model
-
-                Nothing ->
-                    model
+        Eth.Token.SetTokenAllowance { asset, contract, customer, allowance } ->
+            -- Since we're removing crowd proposal factory, we'll just return the model unchanged
+            model
 
         _ ->
             model
@@ -802,7 +786,7 @@ view userLanguage maybeConfig maybeNetwork timezone maybeCurrentTime account tra
                                     getPendingApproveCAPTransaction config network accountAddress transactionState
 
                                 voteHeader =
-                                    case ( getCurrentVotes accountAddress governanceState, getCompoundGovernanceTokenBalance accountAddress governanceState ) of
+                                    case ( getCurrentVotes accountAddress governanceState, getGroveGovernanceTokenBalance accountAddress governanceState ) of
                                         ( Just votes, Just compBalance ) ->
                                             let
                                                 ( headerText, headerSpan ) =
@@ -933,7 +917,7 @@ delegateModal userLanguage network maybeDelegateTransaction ((Customer addressSt
                     DelegateTransaction ->
                         let
                             votesToDelegate =
-                                getCompoundGovernanceTokenBalance accountAddress governanceState
+                                getGroveGovernanceTokenBalance accountAddress governanceState
                                     |> Maybe.withDefault Decimal.zero
 
                             title =
@@ -971,7 +955,7 @@ delegateModal userLanguage network maybeDelegateTransaction ((Customer addressSt
                                                 (Just network)
                                                 (Ethereum.TransactionHash transaction.trxHash)
                                                 [ class "submit-button button main vote__modal__body__button" ]
-                                                [ text (Translations.view_on_etherscan userLanguage) ]
+                                                [ text (Translations.view_on_xrpl_explorer userLanguage) ]
                                         }
 
                                     Nothing ->
@@ -1297,7 +1281,7 @@ approveCAPModal userLanguage config maybeNetwork customer tokenState maybePendin
                                         maybeNetwork
                                         (Ethereum.TransactionHash transaction.trxHash)
                                         [ class "submit-button button main vote__modal__body__button" ]
-                                        [ text (Translations.view_on_etherscan userLanguage) ]
+                                        [ text (Translations.view_on_xrpl_explorer userLanguage) ]
                                 )
                             |> Maybe.withDefault (text "")
                     }
@@ -1363,7 +1347,7 @@ loadingVotingWalletPanel userLanguage =
 
 votingWalletPanel : Translations.Lang -> Config -> Network -> CustomerAddress -> Maybe Transaction -> GovernanceState -> TokenState -> Model -> Html Msg
 votingWalletPanel userLanguage config network accountAddress maybeDelegateTransaction governanceState tokenState { currentDelegateeAcccount } =
-    case ( getCurrentVotes accountAddress governanceState, getCompoundGovernanceTokenBalance accountAddress governanceState, getDelegatedAddress accountAddress governanceState ) of
+    case ( getCurrentVotes accountAddress governanceState, getGroveGovernanceTokenBalance accountAddress governanceState, getDelegatedAddress accountAddress governanceState ) of
         ( Just votes_, Just balance_, Just delegateType ) ->
             let
                 ( votesSpan, voteWeight ) =
@@ -1490,19 +1474,18 @@ votingWalletPanel userLanguage config network accountAddress maybeDelegateTransa
                                 Eth.Token.isCAPFactoryApproved config tokenState
 
                             enableClickOrDisabled =
-                                case ( config.maybeCompToken, config.maybeCrowdProposalFactory ) of
-                                    ( Just compToken, Just capFactory ) ->
+                                case config.maybeCompToken of
+                                    Just compToken ->
                                         let
                                             compAssetAddress =
                                                 Ethereum.contractAddressToAssetAddress compToken.address
                                         in
-                                        Eth.Token.FaucetTokenApprove
-                                            network
-                                            capFactory
-                                            compAssetAddress
-                                            accountAddress
-                                            True
-                                            |> Eth.Token.Web3TransactionMsg
+                                        Eth.Token.SetTokenAllowance
+                                            { asset = compAssetAddress
+                                            , contract = Contract "0x0000000000000000000000000000000000000000"
+                                            , customer = accountAddress
+                                            , allowance = Decimal.fromInt 100
+                                            }
                                             |> WrappedTokenMsg
                                             |> onClickStopPropagation
 
@@ -1527,7 +1510,7 @@ votingWalletPanel userLanguage config network accountAddress maybeDelegateTransa
                                 formatToDecimalPlaces 0 False votes_
 
                             docsUrl =
-                                landingUrlForPage MainNet (Docs Governance Nothing)
+                                landingUrlForPage Xrplevm (Docs Governance Nothing)
                         in
                         div [ class "tooltip" ]
                             [ div [ class "wallet-panel__data__row__vote-weight" ]
@@ -1550,7 +1533,7 @@ votingWalletPanel userLanguage config network accountAddress maybeDelegateTransa
                             [ div [ class "wallet-panel__data__row__setup-title" ] [ text (Translations.setup_voting userLanguage) ]
                             , p [ class "wallet-panel__data__row__setup-description" ]
                                 [ text (Translations.setup_voting_description userLanguage)
-                                , a (target "_blank" :: href External "https://medium.com/compound-finance/compound-governance-5531f524cf68") [ text (Translations.learn_more userLanguage ++ ".") ]
+                                , a (target "_blank" :: href External "#") [ text (Translations.learn_more userLanguage ++ ".") ]
                                 ]
                             , div [ class "button main wallet-panel__data__row__button wallet-panel__data__row__button--undelegated", onClick (ForSelf (SetDelegateModal SelectDelegationType)) ]
                                 [ div [ class "wallet-panel__data__row__button__text" ]
@@ -1586,7 +1569,7 @@ votingWalletPanel userLanguage config network accountAddress maybeDelegateTransa
                             , div [ class "wallet-panel__data__row__with-icon" ]
                                 [ p [ class "wallet-panel__data__row__value" ]
                                     balanceSpans
-                                , img [ class "wallet-panel__data__row__comp", src "./images/comp-icn.svg" ] []
+                                , img [ class "wallet-panel__data__row__comp", src "./images/grove-icn.svg" ] []
                                 ]
                             ]
                          ]
@@ -1752,7 +1735,7 @@ voteProposalRow userLanguage timezone maybeCurrentTime config network account mo
                 Nothing ->
                     case maybeCurrentState of
                         Just ProposalServiceModels.Pending ->
-                            if network == Ropsten then
+                            if network == Xrplevm then
                                 div [ class "button proposal__queue-actions-button", onClickStopPropagation (ForSelf (SetVoteModal (SelectVoteType proposal Nothing ""))) ] [ text (Translations.vote userLanguage) ]
 
                             else
@@ -1764,37 +1747,6 @@ voteProposalRow userLanguage timezone maybeCurrentTime config network account mo
 
                             else
                                 text ""
-
-                        Just Succeeded ->
-                            case ( config.maybeGovernor, account ) of
-                                ( Just governor, Acct customer _ ) ->
-                                    div [ class "button main proposal__queue-execute-button", onClickStopPropagation (WrappedGovernanceMsg (Eth.Governance.QueueProposal governor customer proposal.id)) ]
-                                        [ text (Translations.queue userLanguage) ]
-
-                                _ ->
-                                    text ""
-
-                        Just Queued ->
-                            let
-                                maybeRawProposalState =
-                                    proposal.states |> List.reverse |> List.head
-                            in
-                            case ( config.maybeGovernor, account, maybeRawProposalState ) of
-                                ( Just governor, Acct customer _, Just rawProposalState ) ->
-                                    case ( maybeCurrentTime, rawProposalState.end_time ) of
-                                        ( Just time, Just endTime ) ->
-                                            if CompoundComponents.Utils.Time.posixToSeconds time > CompoundComponents.Utils.Time.posixToSeconds endTime then
-                                                div [ class "button main proposal__queue-execute-button", onClickStopPropagation (WrappedGovernanceMsg (Eth.Governance.ExecuteProposal governor customer proposal.id)) ]
-                                                    [ text (Translations.execute userLanguage) ]
-
-                                            else
-                                                text ""
-
-                                        _ ->
-                                            text ""
-
-                                _ ->
-                                    text ""
 
                         _ ->
                             text ""
@@ -1899,7 +1851,7 @@ subscriptions _ =
         ]
 
 
-port getVoteDashboardDataPort : { governorAddress : String, isBravo : Bool, compoundLens : String, governanceTokenAddress : String, decimals : Int, initialBlockNumber : Int, currentBlockNumber : Int, voter : String, network : String } -> Cmd msg
+port getVoteDashboardDataPort : { governorAddress : String, isBravo : Bool, groveLens : String, governanceTokenAddress : String, decimals : Int, initialBlockNumber : Int, currentBlockNumber : Int, voter : String, network : String } -> Cmd msg
 
 
 getVoteDashboardData : Dict String Config -> Maybe Network -> Maybe Int -> Account -> Cmd msg
@@ -1911,28 +1863,23 @@ getVoteDashboardData configs maybeNetwork maybeCurrentBlockNumber account =
                     String.toLower (networkName network)
 
                 Nothing ->
-                    String.toLower (networkName MainNet)
+                    String.toLower (networkName Xrplevm)
 
         getTrxsCmd =
             case ( Dict.get nameOfNetwork configs, account, maybeCurrentBlockNumber ) of
                 ( Just config, Acct (Customer voter) _, Just currentBlockNumber ) ->
-                    case ( config.maybeGovernor, config.maybeCompToken ) of
-                        ( Just ( governorAddress, isBravo ), Just comp ) ->
+                    case config.maybeCompToken of
+                        Just comp ->
                             let
-                                initialBlock =
-                                    if isBravo then
-                                        Dict.get "GovernorBravo" config.blocks
-
-                                    else
-                                        Dict.get "GovernorAlpha" config.blocks
+                                initialBlock = Dict.get "GovernorAlpha" config.blocks
                             in
                             initialBlock
                                 |> Maybe.map
                                     (\blockNumber ->
                                         getVoteDashboardDataPort
-                                            { governorAddress = getContractAddressString governorAddress
-                                            , isBravo = isBravo
-                                            , compoundLens = getContractAddressString config.compoundLens
+                                            { governorAddress = "0x0000000000000000000000000000000000000000"
+                                            , isBravo = False
+                                            , groveLens = getContractAddressString config.groveLens
                                             , governanceTokenAddress = getContractAddressString comp.address
                                             , initialBlockNumber = blockNumber
                                             , currentBlockNumber = currentBlockNumber
@@ -1980,15 +1927,15 @@ port governanceVoteProposalPort : { adminAddress : String, governorAddress : Str
 
 
 voteProposal : CustomerAddress -> String -> Bool -> Int -> VoteType -> String -> Cmd msg
-voteProposal (Customer adminAddress) governorAddress isBravo proposalId voteType reason =
+voteProposal (Customer adminAddress) _ _ proposalId voteType reason =
     let
         supportValue =
             voteTypeAsInt voteType
     in
     governanceVoteProposalPort
         { adminAddress = adminAddress
-        , governorAddress = governorAddress
-        , isBravo = isBravo
+        , governorAddress = "0x0000000000000000000000000000000000000000"
+        , isBravo = False
         , proposalId = proposalId
         , supportValue = supportValue
         , reason = reason

@@ -15,7 +15,7 @@ terms_of_service _ =
 
 terms_intro_part1 : Translations.Lang -> String
 terms_intro_part1 _ =
-    "Welcome to https://app.compound.finance, a website-hosted user interface (the “Interface” or “App”) provided by Compound Labs, Inc. (“we”, “our”, or “us”). The Interface provides access to a decentralized protocol on the Ethereum blockchain that allows suppliers and borrowers of certain digital assets to participate in autonomous interest rate markets (the “Protocol”)."
+    "Welcome to https://app.grove.finance, a website-hosted user interface (the “Interface” or “App”) provided by Grove Labs, Inc. (“we”, “our”, or “us”). The Interface provides access to a decentralized protocol on the Ethereum blockchain that allows suppliers and borrowers of certain digital assets to participate in autonomous interest rate markets (the “Protocol”)."
 
 
 terms_intro_part2 : Translations.Lang -> String
@@ -40,7 +40,7 @@ terms_1_header _ =
 
 terms_1_description : Translations.Lang -> String
 terms_1_description _ =
-    "We reserve the right, in our sole discretion, to modify this Agreement from time to time. If we make any modifications, we will notify you by updating the date at the top of the Agreement and by maintaining a current version of the Agreement at https://app.compound.finance/terms. All modifications will be effective when they are posted, and your continued use of the Interface will serve as confirmation of your acceptance of those modifications. If you do not agree with any modifications to this Agreement, you must immediately stop accessing and using the Interface."
+    "We reserve the right, in our sole discretion, to modify this Agreement from time to time. If we make any modifications, we will notify you by updating the date at the top of the Agreement and by maintaining a current version of the Agreement at https://app.grove.finance/terms. All modifications will be effective when they are posted, and your continued use of the Interface will serve as confirmation of your acceptance of those modifications. If you do not agree with any modifications to this Agreement, you must immediately stop accessing and using the Interface."
 
 
 terms_2_header : Translations.Lang -> String
@@ -245,7 +245,7 @@ terms_15_header _ =
 
 terms_15_description_part1 : Translations.Lang -> String
 terms_15_description_part1 _ =
-    "We will use our best efforts to resolve any potential disputes through informal, good faith negotiations. If a potential dispute arises, you must contact us by sending an email to legal@compound.finance so that we can attempt to resolve it without resorting to formal dispute resolution. If we aren’t able to reach an informal resolution within sixty days of your email, then you and we both agree to resolve the potential dispute according to the process set forth below."
+    "We will use our best efforts to resolve any potential disputes through informal, good faith negotiations. If a potential dispute arises, you must contact us by sending an email to legal@grove.finance so that we can attempt to resolve it without resorting to formal dispute resolution. If we aren’t able to reach an informal resolution within sixty days of your email, then you and we both agree to resolve the potential dispute according to the process set forth below."
 
 
 terms_15_description_part2 : Translations.Lang -> String

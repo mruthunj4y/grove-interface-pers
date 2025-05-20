@@ -3,7 +3,7 @@ module DappInterface.CollateralToggleModal exposing
     , TranslationDictionary
     , Translator
     , handleBNTransactionUpdate
-    , handleCompoundUpdate
+    , handleGroveUpdate
     , handleNonBNTransactionUpdate
     , prepareToShowModal
     , translator
@@ -12,20 +12,20 @@ module DappInterface.CollateralToggleModal exposing
 
 import Balances
 import Browser.Dom
-import CompoundComponents.DisplayCurrency as DisplayCurrency
-import CompoundComponents.Eth.ConnectedEthWallet as ConnectedEthWallet
-import CompoundComponents.Eth.Ethereum as Ethereum exposing (Account(..), CustomerAddress)
-import CompoundComponents.Eth.Network exposing (Network)
-import CompoundComponents.Ether.BNTransaction as BNTransaction exposing (BNTransactionMsg)
-import CompoundComponents.Functions as Functions
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (HrefLinkType(..), class, href, id, onClickStopPropagation, placeholder, style, target, type_, value)
-import CompoundComponents.Utils.Markup exposing (disabled)
-import CompoundComponents.Utils.NumberFormatter as NumberFormatter exposing (formatCollateralFactor, formatPercentageToNearestWhole, formatRate)
+import GroveComponents.DisplayCurrency as DisplayCurrency
+import GroveComponents.Eth.ConnectedEthWallet as ConnectedEthWallet
+import GroveComponents.Eth.Ethereum as Ethereum exposing (Account(..), CustomerAddress)
+import GroveComponents.Eth.Network exposing (Network)
+import GroveComponents.Ether.BNTransaction as BNTransaction exposing (BNTransactionMsg)
+import GroveComponents.Functions as Functions
+import GroveComponents.Utils.GroveHtmlAttributes exposing (HrefLinkType(..), class, href, id, onClickStopPropagation, placeholder, style, target, type_, value)
+import GroveComponents.Utils.Markup exposing (disabled)
+import GroveComponents.Utils.NumberFormatter as NumberFormatter exposing (formatCollateralFactor, formatPercentageToNearestWhole, formatRate)
 import DappInterface.MainModel exposing (BorrowingRisk(..), CollateralToggleModalState, Model, getBorrowingRisk, getCurrentConfig)
 import Date
 import Decimal exposing (Decimal)
 import Dict exposing (Dict)
-import Eth.Compound exposing (CompoundMsg, CompoundState)
+import Eth.Grove exposing (GroveMsg, GroveState)
 import Eth.Config exposing (Config)
 import Eth.Oracle exposing (OracleState)
 import Eth.Token exposing (CToken, TokenMsg, TokenState, getCTokenAddress)
@@ -46,12 +46,12 @@ type ParentMsg
 
 type Msg
     = ForParent ParentMsg
-    | WrappedCompoundMsg CompoundMsg
+    | WrappedGroveMsg GroveMsg
 
 
 type alias TranslationDictionary msg =
     { onParentMsg : ParentMsg -> msg
-    , onWrappedCompoundMsg : CompoundMsg -> msg
+    , onWrappedGroveMsg : GroveMsg -> msg
     }
 
 
@@ -60,20 +60,20 @@ type alias Translator msg =
 
 
 translator : TranslationDictionary msg -> Translator msg
-translator { onParentMsg, onWrappedCompoundMsg } msg =
+translator { onParentMsg, onWrappedGroveMsg } msg =
     case msg of
         ForParent parentMsg ->
             onParentMsg parentMsg
 
-        WrappedCompoundMsg tokenMsg ->
-            onWrappedCompoundMsg tokenMsg
+        WrappedGroveMsg tokenMsg ->
+            onWrappedGroveMsg tokenMsg
 
 
 prepareToShowModal : Config -> Model -> CToken -> CollateralToggleModalState
 prepareToShowModal config mainModel selectedToken =
     let
         isInMarket =
-            Balances.hasEnteredAsset config mainModel.compoundState selectedToken
+            Balances.hasEnteredAsset config mainModel.groveState selectedToken
 
         newCollateralModalState =
             { chosenAsset = selectedToken
@@ -84,8 +84,8 @@ prepareToShowModal config mainModel selectedToken =
     newCollateralModalState
 
 
-handleCompoundUpdate : CompoundMsg -> CollateralToggleModalState -> CollateralToggleModalState
-handleCompoundUpdate compoundMsg ({ chosenAsset, actionState } as state) =
+handleGroveUpdate : GroveMsg -> CollateralToggleModalState -> CollateralToggleModalState
+handleGroveUpdate groveMsg ({ chosenAsset, actionState } as state) =
     let
         updateStateIfMatchingAsset : List Ethereum.ContractAddress -> CollateralToggleModalState
         updateStateIfMatchingAsset targetCTokenAddresses =
@@ -107,11 +107,11 @@ handleCompoundUpdate compoundMsg ({ chosenAsset, actionState } as state) =
             else
                 state
     in
-    case compoundMsg of
-        Eth.Compound.Web3TransactionMsg (Eth.Compound.EnterMarkets _ _ cTokenContractAddressList _) ->
+    case groveMsg of
+        Eth.Grove.Web3TransactionMsg (Eth.Grove.EnterMarkets _ _ cTokenContractAddressList _) ->
             updateStateIfMatchingAsset cTokenContractAddressList
 
-        Eth.Compound.Web3TransactionMsg (Eth.Compound.ExitMarket _ _ cTokenContractAddress _) ->
+        Eth.Grove.Web3TransactionMsg (Eth.Grove.ExitMarket _ _ cTokenContractAddress _) ->
             updateStateIfMatchingAsset [ cTokenContractAddress ]
 
         _ ->
@@ -123,12 +123,19 @@ updateStateForTrxUpdates config ({ actionState } as state) mainModel =
     let
         maybePendingCTokenTransaction =
             getMostRecentAssetPendingTransaction config state mainModel
+        
+        _ = Debug.log "CollateralToggleModal state update" 
+            { actionState = actionState
+            , hasPendingTransaction = Maybe.map (\_ -> True) maybePendingCTokenTransaction |> Maybe.withDefault False
+            , pendingTransactionStatus = Maybe.map .status maybePendingCTokenTransaction
+            }
     in
     case maybePendingCTokenTransaction of
-        Just _ ->
+        Just pendingTrx ->
             if actionState == DappInterface.MainModel.AwaitingEnterExitTransactionMined then
                 Nothing
-
+            else if actionState == DappInterface.MainModel.AwaitingEnterExitConfirmTransaction then
+                Just { state | actionState = DappInterface.MainModel.AwaitingEnterExitTransactionMined }
             else
                 Just state
 
@@ -218,7 +225,7 @@ getModalDescriptions userLanguage config customerAddress ({ chosenAsset, enterin
             Dict.values mainModel.tokenState.cTokens
 
         balanceTotalsUsd =
-            Balances.getUnderlyingTotalsInUsd mainModel.compoundState cTokens mainModel.oracleState
+            Balances.getUnderlyingTotalsInUsd mainModel.groveState cTokens mainModel.oracleState
 
         ( _, postActionBorrowLimitUsd ) =
             getPreAndPostActionBorrowLimits config customerAddress collateralToggleModalState mainModel
@@ -246,7 +253,7 @@ getModalDescriptions userLanguage config customerAddress ({ chosenAsset, enterin
             , p [ class "small text-center" ]
                 [ text (Translations.disable_as_collateral_description userLanguage)
                 , text " "
-                , a ([ target "_blank" ] ++ href External "https://medium.com/compound-finance/faq-1a2636713b69") [ text (Translations.collateral_toggle_learn_more userLanguage) ]
+                , a ([ target "_blank" ] ++ href External "https://medium.com/Grove-finance/faq-1a2636713b69") [ text (Translations.collateral_toggle_learn_more userLanguage) ]
                 , text "."
                 ]
             )
@@ -256,7 +263,7 @@ getModalDescriptions userLanguage config customerAddress ({ chosenAsset, enterin
         , p [ class "small text-center" ]
             [ text (Translations.enable_as_collateral_description userLanguage)
             , text " "
-            , a ([ target "_blank" ] ++ href External "https://medium.com/compound-finance/faq-1a2636713b69") [ text (Translations.collateral_toggle_learn_more userLanguage) ]
+            , a ([ target "_blank" ] ++ href External "https://medium.com/Grove-finance/faq-1a2636713b69") [ text (Translations.collateral_toggle_learn_more userLanguage) ]
             , text "."
             ]
         )
@@ -272,9 +279,6 @@ awaitingWeb3ConfirmView userLanguage config customerAddress collateralToggleModa
             case connectedEthWalletModel.selectedProvider of
                 Just ConnectedEthWallet.Metamask ->
                     Translations.confirm_the_transaction_with userLanguage (Translations.metamask userLanguage)
-
-                Just ConnectedEthWallet.WalletLink ->
-                    Translations.confirm_the_transaction_with userLanguage (Translations.coinbase_wallet userLanguage)
 
                 Just ConnectedEthWallet.Ledger ->
                     Translations.confirm_the_transaction_with userLanguage (Translations.ledger userLanguage)
@@ -308,7 +312,7 @@ awaitingPendingTransactionView userLanguage config customerAddress collateralTog
                 network
                 (Ethereum.TransactionHash transaction.trxHash)
                 [ class "submit-button button main borrow" ]
-                [ text (Translations.view_on_etherscan userLanguage) ]
+                [ text (Translations.view_on_xrpl_explorer userLanguage) ]
     in
     div [ class "copy" ]
         [ h4 []
@@ -330,7 +334,7 @@ borrowingLimitsView userLanguage config network customerAddress maybeEtherUsdPri
             Dict.values mainModel.tokenState.cTokens
 
         balanceTotalsUsd =
-            Balances.getUnderlyingTotalsInUsd mainModel.compoundState cTokens mainModel.oracleState
+            Balances.getUnderlyingTotalsInUsd mainModel.groveState cTokens mainModel.oracleState
 
         ( preActionBorrowLimitUsd, postActionBorrowLimitUsd ) =
             getPreAndPostActionBorrowLimits config customerAddress collateralToggleModalState mainModel
@@ -416,14 +420,14 @@ borrowingLimitsView userLanguage config network customerAddress maybeEtherUsdPri
                 else
                     button
                         [ class "submit-button button borrow"
-                        , onClickStopPropagation (WrappedCompoundMsg <| Eth.Compound.Web3TransactionMsg <| Eth.Compound.ExitMarket network config.comptroller chosenAsset.contractAddress customerAddress)
+                        , onClickStopPropagation (WrappedGroveMsg <| Eth.Grove.Web3TransactionMsg <| Eth.Grove.ExitMarket network config.comptroller chosenAsset.contractAddress customerAddress)
                         ]
                         [ text (Translations.disable_token userLanguage chosenAsset.underlying.symbol) ]
 
             else
                 button
                     [ class "submit-button button borrow"
-                    , onClickStopPropagation (WrappedCompoundMsg <| Eth.Compound.Web3TransactionMsg <| Eth.Compound.EnterMarkets network config.comptroller [ chosenAsset.contractAddress ] customerAddress)
+                    , onClickStopPropagation (WrappedGroveMsg <| Eth.Grove.Web3TransactionMsg <| Eth.Grove.EnterMarkets network config.comptroller [ chosenAsset.contractAddress ] customerAddress)
                     ]
                     [ text (Translations.use_token_as_collateral userLanguage chosenAsset.underlying.symbol) ]
 
@@ -459,20 +463,20 @@ getPreAndPostActionBorrowLimits config customerAddress { chosenAsset, entering }
             Dict.values mainModel.tokenState.cTokens
 
         preActionBorrowLimitUsd =
-            Utils.SafeLiquidity.getCurrentBorrowLimitUsd mainModel.compoundState mainModel.tokenState mainModel.oracleState
+            Utils.SafeLiquidity.getCurrentBorrowLimitUsd mainModel.groveState mainModel.tokenState mainModel.oracleState
 
         tokenValueUsd =
             Eth.Oracle.getOraclePrice mainModel.oracleState chosenAsset.underlying
                 |> Maybe.withDefault Decimal.zero
 
         collateralFactor =
-            mainModel.compoundState.cTokensMetadata
+            mainModel.groveState.cTokensMetadata
                 |> Dict.get (Ethereum.getContractAddressString chosenAsset.contractAddress)
                 |> Maybe.map .collateralFactor
                 |> Maybe.withDefault Decimal.zero
 
         supplyBalance =
-            Balances.getUnderlyingBalances mainModel.compoundState chosenAsset.contractAddress
+            Balances.getUnderlyingBalances mainModel.groveState chosenAsset.contractAddress
                 |> Maybe.map .underlyingSupplyBalance
                 |> Maybe.withDefault Decimal.zero
 

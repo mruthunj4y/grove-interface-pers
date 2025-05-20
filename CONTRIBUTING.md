@@ -1,12 +1,12 @@
 # Contributing to this repository
 
-Copyright 2022, Compound Labs, Inc. and repository contributors. This repository is licensed under GPLv3 (please see [LICENSE](/LICENSE) for the full-text of the license).
+Copyright 2022, grove Labs, Inc. and repository contributors. This repository is licensed under GPLv3 (please see [LICENSE](/LICENSE) for the full-text of the license).
 
 All contributors to this repository must release contributed code under this GPLv3 license, free of any other encumbrance. Contributors also agree that contributions may be re-licensed under MIT or BSD-3 licenses in the future without notice. In such instances, all copyright notices will be retained.
 
 ## Types of contributions
 
-You can contribute to the Compound web3 front-end in several ways. This repo is a place to discuss and collaborate on interfaces like `app.compound.finance`!
+You can contribute to the grove web3 front-end in several ways. This repo is a place to discuss and collaborate on interfaces like `app.grove.finance`!
 
 When contributing to this repository, please first discuss the change you wish to make via issue, forum post on [comp.xyz](https://www.comp.xyz/), or Discord.
 
@@ -14,7 +14,7 @@ You, of course, may fork this repository and deploy your own changes. Please not
 
 ### :mega: Discussions
 
-If you'd like help troubleshooting a PR you're working on, have a great new idea, or want to share something amazing, join us in [Discord](https://compound.finance/discord).
+If you'd like help troubleshooting a PR you're working on, have a great new idea, or want to share something amazing, join us in [Discord](https://grove.finance/discord).
 
 ### :beetle: Issues
 
@@ -46,7 +46,7 @@ Here's some information that might be helpful while working on a PR:
 
 ## Reviewing
 
-The community is expected to help review every single PR. The purpose of reviews is to ensure that any changes provide the safest and best experience for users of the Compound web3 front-end.
+The community is expected to help review every single PR. The purpose of reviews is to ensure that any changes provide the safest and best experience for users of the grove web3 front-end.
 
 :yellow_heart: Reviews are always respectful, acknowledging that everyone did the best possible job with the knowledge they had at the time.  
 :yellow_heart: Reviews discuss content, not the person who created it.  
@@ -59,8 +59,8 @@ For content changes, make sure that you:
 - [ ] Compare your pull request's source changes to the version deployed to IPFS to confirm that the output matches the source and that everything is rendering as expected. This helps spot issues like typos, or content that isn't rendering correctly.
 - [ ] If there are any failing checks in your PR, troubleshoot them until they're all passing.
 
-### Source Code vs app.compound.finance
+### Source Code vs app.grove.finance
 
 When changes from pull requests are merged, a build is first created in the repo and then an action snapshots the `/build` directory contents and deploys the directory to IPFS.
 
-A member of the Compound team can then take the built release and update where [app.compound.finance](https://app.compound.finance) redirects to your IPFS content of your release. We'll also notify users in the `#development` channel in Compound Discord to notify the community of a new deploy of the web3 front-end.
+A member of the grove team can then take the built release and update where [app.grove.finance](https://app.grove.finance) redirects to your IPFS content of your release. We'll also notify users in the `#development` channel in grove Discord to notify the community of a new deploy of the web3 front-end.

@@ -1,63 +1,63 @@
-module Ether.Contracts.Maximillion exposing (repayBehalf)
+-- module Ether.Contracts.Maximillion exposing (repayBehalf)
 
-import BigInt exposing (BigInt)
-import CompoundComponents.Console as Console
-import CompoundComponents.Eth.Ethereum as Ethereum exposing (ContractAddress(..), CustomerAddress(..))
-import CompoundComponents.Eth.Network exposing (Network(..))
-import CompoundComponents.Ether.BNTransaction as BNTransaction exposing (BNTransactionState)
-import CompoundComponents.Ether.FromEthereumUtils as FromEthereumUtils
-import CompoundComponents.Ether.FunctionSpec as FunctionSpec
-import CompoundComponents.Ether.Value as Value
-import CompoundComponents.Ether.Web3 as EtherWeb3
-import Eth.Config exposing (Config)
-
-
-
---function repayBehalf(address borrower) public payable
+-- import BigInt exposing (BigInt)
+-- import GroveComponents.Console as Console
+-- import GroveComponents.Eth.Ethereum as Ethereum exposing (ContractAddress(..), CustomerAddress(..))
+-- import GroveComponents.Eth.Network exposing (Network(..))
+-- import GroveComponents.Ether.BNTransaction as BNTransaction exposing (BNTransactionState)
+-- import GroveComponents.Ether.FromEthereumUtils as FromEthereumUtils
+-- import GroveComponents.Ether.FunctionSpec as FunctionSpec
+-- import GroveComponents.Ether.Value as Value
+-- import GroveComponents.Ether.Web3 as EtherWeb3
+-- import Eth.Config exposing (Config)
 
 
-repayBehalf : Config -> Network -> CustomerAddress -> ContractAddress -> BigInt -> BNTransactionState -> ( BNTransactionState, Cmd msg )
-repayBehalf config network customerAddress cTokenAddress repayUnderlyingAmountWei bnState =
-    let
-        ownerAddressResult =
-            FromEthereumUtils.customerAddressToEtherAddress customerAddress
 
-        dataResult =
-            ownerAddressResult
-                |> Result.andThen
-                    (\ownerAddress ->
-                        FunctionSpec.encodeCall
-                            "repayBehalf"
-                            [ Value.Address ownerAddress ]
-                    )
+-- function repayBehalf(address borrower) public payable
 
-        maximillionAddressResult =
-            FromEthereumUtils.contractAddressToEtherAddress config.maximillion
 
-        ( trx, cmd ) =
-            case ( ownerAddressResult, maximillionAddressResult, dataResult ) of
-                ( Ok fromAddress, Ok toAddress, Ok data ) ->
-                    let
-                        cTokenAddressString =
-                            Ethereum.getContractAddressString cTokenAddress
+-- repayBehalf : Config -> Network -> CustomerAddress -> ContractAddress -> BigInt -> BNTransactionState -> ( BNTransactionState, Cmd msg )
+-- repayBehalf config network customerAddress cTokenAddress repayUnderlyingAmountWei bnState =
+--     let
+--         ownerAddressResult =
+--             FromEthereumUtils.customerAddressToEtherAddress customerAddress
 
-                        amountString =
-                            BigInt.toString repayUnderlyingAmountWei
+--         dataResult =
+--             ownerAddressResult
+--                 |> Result.andThen
+--                     (\ownerAddress ->
+--                         FunctionSpec.encodeCall
+--                             "repayBehalf"
+--                             [ Value.Address ownerAddress ]
+--                     )
 
-                        bnTransaction =
-                            BNTransaction.newTransaction network fromAddress toAddress "repayBehalf" [ cTokenAddressString, amountString ] bnState
-                    in
-                    ( Just bnTransaction
-                    , EtherWeb3.sendTransactionWithValue repayUnderlyingAmountWei
-                        (BNTransaction.getTxModule network customerAddress)
-                        bnTransaction.txId
-                        { from = fromAddress
-                        , to = toAddress
-                        , data = data
-                        }
-                    )
+--         maximillionAddressResult =
+--             FromEthereumUtils.contractAddressToEtherAddress config.maximillion
 
-                _ ->
-                    ( Nothing, Console.log "Could not encode data for Maximillion.repayBehalf" )
-    in
-    ( BNTransaction.appendTrx bnState trx, cmd )
+--         ( trx, cmd ) =
+--             case ( ownerAddressResult, maximillionAddressResult, dataResult ) of
+--                 ( Ok fromAddress, Ok toAddress, Ok data ) ->
+--                     let
+--                         cTokenAddressString =
+--                             Ethereum.getContractAddressString cTokenAddress
+
+--                         amountString =
+--                             BigInt.toString repayUnderlyingAmountWei
+
+--                         bnTransaction =
+--                             BNTransaction.newTransaction network fromAddress toAddress "repayBehalf" [ cTokenAddressString, amountString ] bnState
+--                     in
+--                     ( Just bnTransaction
+--                     , EtherWeb3.sendTransactionWithValue repayUnderlyingAmountWei
+--                         (BNTransaction.getTxModule network customerAddress)
+--                         bnTransaction.txId
+--                         { from = fromAddress
+--                         , to = toAddress
+--                         , data = data
+--                         }
+--                     )
+
+--                 _ ->
+--                     ( Nothing, Console.log "Could not encode data for Maximillion.repayBehalf" )
+--     in
+--     ( BNTransaction.appendTrx bnState trx, cmd )

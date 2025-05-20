@@ -11,10 +11,10 @@ port module Repl exposing
     )
 
 import Browser.Dom as Dom
-import CompoundComponents.Eth.Ethereum exposing (CustomerAddress, getCustomerAddressString)
-import CompoundComponents.Eth.Network exposing (Network(..), networkName)
-import CompoundComponents.Functions exposing (handleError)
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (HrefLinkType(..), class, disabled, id, type_, value)
+import GroveComponents.Eth.Ethereum exposing (CustomerAddress, getCustomerAddressString)
+import GroveComponents.Eth.Network exposing (Network(..), networkName)
+import GroveComponents.Functions exposing (handleError)
+import GroveComponents.Utils.GroveHtmlAttributes exposing (HrefLinkType(..), class, disabled, id, type_, value)
 import Html exposing (Html, button, div, h4, input, p, span, text)
 import Html.Events exposing (keyCode, on, onClick, onInput, onSubmit)
 import Json.Decode exposing (field)
@@ -205,7 +205,7 @@ view { open, enabled, history, line } =
         div [ class "container-large main", id "repl" ]
             [ div [ class "legacy-panel" ]
                 [ div [ class "row header" ]
-                    [ div [ class "col-xs-12" ] [ h4 [] [ text "Compound Console" ] ]
+                    [ div [ class "col-xs-12" ] [ h4 [] [ text "grove Console" ] ]
                     ]
                 , div [] (List.map historyView (List.reverse history))
                 , div [ class "row" ]

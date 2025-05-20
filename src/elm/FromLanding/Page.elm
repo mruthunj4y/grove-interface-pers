@@ -4,7 +4,7 @@ module FromLanding.Page exposing
     , landingUrlForPage
     )
 
-import CompoundComponents.Eth.Network exposing (Network(..), networkName)
+import GroveComponents.Eth.Network exposing (Network(..), networkName)
 import Url.Builder as UrlBuilder
 
 
@@ -22,7 +22,7 @@ type DocsSubPage
     | Comptroller
     | Governance
     | OpenPriceFeed
-    | CompoundJs
+    | GroveJs
     | API
     | Security
 
@@ -52,8 +52,8 @@ getHrefUrl page =
                         OpenPriceFeed ->
                             "/prices"
 
-                        CompoundJs ->
-                            "/compound-js"
+                        GroveJs ->
+                            "/Grove-js"
 
                         API ->
                             "/api"
@@ -88,7 +88,7 @@ landingUrlForPage : Network -> LandingPage -> String
 landingUrlForPage network page =
     let
         baseUrl =
-            "https://compound.finance"
+            "https://Grove.finance"
 
         networkParam =
             String.toLower (networkName network)

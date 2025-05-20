@@ -4,7 +4,6 @@ port module Eth.Token exposing
     , Token
     , TokenMsg(..)
     , TokenState
-    , TokenTransactionMsg(..)
     , clearTokenState
     , emptyState
     , ethDecimals
@@ -23,25 +22,32 @@ port module Eth.Token exposing
     )
 
 import BigInt
-import CompoundComponents.Console as Console
-import CompoundComponents.Eth.Decoders exposing (decimal, decodeAssetAddress, decodeContractAddress, decodeCustomerAddress)
-import CompoundComponents.Eth.Ethereum as Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), assetAddressToContractAddress, contractAddressToAssetAddress, getAssetAddressString, getContractAddressString, getCustomerAddressString)
-import CompoundComponents.Eth.Network exposing (Network)
-import CompoundComponents.Eth.TokenMath as TokenMath
-import CompoundComponents.Ether.BNTransaction as BNTransaction exposing (BNTransactionState)
-import CompoundComponents.Ether.FromEthereumUtils as FromEthereumUtils
-import CompoundComponents.Ether.FunctionSpec as FunctionSpec
-import CompoundComponents.Ether.Helpers
-import CompoundComponents.Ether.Value as Value
-import CompoundComponents.Ether.Web3 as EtherWeb3
-import CompoundComponents.Functions exposing (default, handleError, maybeMap)
+import GroveComponents.Console as Console
+import GroveComponents.Eth.Decoders exposing (decimal, decodeAssetAddress, decodeContractAddress, decodeCustomerAddress)
+import GroveComponents.Eth.Ethereum as Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), assetAddressToContractAddress, contractAddressToAssetAddress, getAssetAddressString, getContractAddressString, getCustomerAddressString)
+import GroveComponents.Eth.Network exposing (Network)
+import GroveComponents.Eth.TokenMath as TokenMath
+import GroveComponents.Ether.BNTransaction as BNTransaction exposing (BNTransactionState)
+import GroveComponents.Ether.FromEthereumUtils as FromEthereumUtils
+import GroveComponents.Ether.FunctionSpec as FunctionSpec
+import GroveComponents.Ether.Helpers
+import GroveComponents.Ether.Value as Value
+import GroveComponents.Ether.Web3 as EtherWeb3
+import GroveComponents.Functions exposing (default, handleError, maybeMap)
 import Decimal exposing (Decimal)
 import Dict exposing (Dict)
-import Eth.Config exposing (CTokenConfig, Config, TokenConfig)
+import Eth.Config exposing (Config, TokenConfig)
 import Json.Decode exposing (Value, decodeValue, field, int, string, succeed)
 import Source.Infura exposing (loadEtherPrice)
 import Utils.Http
 
+type alias CTokenConfig =
+    { address : ContractAddress
+    , name : String
+    , symbol : String
+    , decimals : Int
+    , underlying : TokenConfig
+    }
 
 type alias Token =
     { assetAddress : AssetAddress
@@ -87,14 +93,12 @@ type alias TokenAllowance =
 type TokenMsg
     = SetTokenAllowance TokenAllowance
     | SetInfuraEtherUSD Decimal
-    | Web3TransactionMsg TokenTransactionMsg
+    | Web3TransactionMsg
     | Error String
 
 
 type TokenTransactionMsg
-    = FaucetTokenAllocate Network ContractAddress AssetAddress CustomerAddress Int
-    | FauceteerDrip Network ContractAddress ContractAddress AssetAddress CustomerAddress
-    | FaucetTokenApprove Network ContractAddress AssetAddress CustomerAddress Bool
+    = NoOp  -- Placeholder for now, can be expanded with actual transaction types as needed
 
 
 loadCTokenSet : Dict String CTokenConfig -> CTokenSet
@@ -156,13 +160,7 @@ tokenAllowancesKey assetAddress contractAddress =
 
 askEtherPrice : Config -> Cmd TokenMsg
 askEtherPrice config =
-    case config.maybeInvertedEtherPriceAsset of
-        Just invertedEtherPriceAsset ->
-            -- If we are pulling the Ether/USD price from another asset (USDC) we can ignore this ask safely.
-            Cmd.none
-
-        Nothing ->
-            loadEtherPrice (handleError (Utils.Http.showError >> Error) SetInfuraEtherUSD)
+    loadEtherPrice (handleError (Utils.Http.showError >> Error) SetInfuraEtherUSD)
 
 
 tokenNewBlockCmd : Config -> TokenState -> Int -> Account -> Cmd TokenMsg
@@ -194,9 +192,9 @@ tokenUpdate config msg ( { cTokens, tokenAllowances } as state, bnState ) =
             , ( bnState, Cmd.none )
             )
 
-        Web3TransactionMsg transactionMsg ->
+        Web3TransactionMsg ->
             ( ( state, Cmd.none )
-            , tokenTransactionUpdate config transactionMsg ( state, bnState )
+            , tokenTransactionUpdate config NoOp ( state, bnState )
             )
 
         Error error ->
@@ -212,172 +210,8 @@ that may update this modules state (like balances for instance).
 tokenTransactionUpdate : Config -> TokenTransactionMsg -> ( TokenState, BNTransactionState ) -> ( BNTransactionState, Cmd msg )
 tokenTransactionUpdate config msg ( { cTokens }, bnState ) =
     case msg of
-        FaucetTokenAllocate network cTokenAddress underlyingTokenAddress customerAddress underlyingDecimals ->
-            --function allocateTo(address _owner, uint256 value)
-            let
-                maybeCToken =
-                    getCTokenByAddress cTokens (getContractAddressString cTokenAddress)
-
-                ownerAddressResult =
-                    FromEthereumUtils.customerAddressToEtherAddress customerAddress
-
-                maybeValue =
-                    maybeCToken
-                        |> Maybe.map
-                            (\cToken ->
-                                let
-                                    underlyingWeiAdjustment =
-                                        BigInt.pow (BigInt.fromInt 10) (BigInt.fromInt cToken.underlying.decimals)
-                                in
-                                BigInt.fromInt 100
-                                    |> BigInt.mul underlyingWeiAdjustment
-                            )
-
-                dataResult =
-                    ownerAddressResult
-                        |> Result.andThen
-                            (\ownerAddress ->
-                                case maybeValue of
-                                    Just value ->
-                                        FunctionSpec.encodeCall
-                                            "allocateTo"
-                                            [ Value.Address ownerAddress
-                                            , Value.UInt 256 value
-                                            ]
-
-                                    Nothing ->
-                                        Result.Err "Unable to create value for allocateTo"
-                            )
-
-                underlyingAssetAddressResult =
-                    FromEthereumUtils.assetAddressToEtherAddress underlyingTokenAddress
-
-                ( trx, cmd ) =
-                    case ( ownerAddressResult, underlyingAssetAddressResult, dataResult ) of
-                        ( Ok fromAddress, Ok toAddress, Ok data ) ->
-                            let
-                                amountString =
-                                    maybeValue
-                                        |> Maybe.map BigInt.toString
-                                        |> Maybe.withDefault "—"
-
-                                bnTransaction =
-                                    BNTransaction.newTransaction network fromAddress toAddress "allocateTo" [ getContractAddressString cTokenAddress, amountString ] bnState
-                            in
-                            ( Just bnTransaction
-                            , EtherWeb3.sendTransaction
-                                (BNTransaction.getTxModule network customerAddress)
-                                bnTransaction.txId
-                                { from = fromAddress
-                                , to = toAddress
-                                , data = data
-                                }
-                            )
-
-                        _ ->
-                            ( Nothing, Console.log "Could not encode data for Faucet.allocateTo" )
-            in
-            ( BNTransaction.appendTrx bnState trx, cmd )
-
-        FauceteerDrip network fauceteerAddress cTokenAddress underlyingTokenAddress customerAddress ->
-            -- function drip(EIP20NonStandardInterface token)
-            let
-                underlyingAssetAddressResult =
-                    FromEthereumUtils.assetAddressToEtherAddress underlyingTokenAddress
-
-                dataResult =
-                    underlyingAssetAddressResult
-                        |> Result.andThen
-                            (\tokenAddress ->
-                                FunctionSpec.encodeCall
-                                    "drip"
-                                    [ Value.Address tokenAddress
-                                    ]
-                            )
-
-                customerAddressResult =
-                    FromEthereumUtils.customerAddressToEtherAddress customerAddress
-
-                fauceteerAddressResult =
-                    FromEthereumUtils.contractAddressToEtherAddress fauceteerAddress
-
-                ( trx, cmd ) =
-                    case ( customerAddressResult, fauceteerAddressResult, dataResult ) of
-                        ( Ok fromAddress, Ok toAddress, Ok data ) ->
-                            let
-                                bnTransaction =
-                                    BNTransaction.newTransaction network fromAddress toAddress "drip" [ getContractAddressString cTokenAddress ] bnState
-                            in
-                            ( Just bnTransaction
-                            , EtherWeb3.sendTransaction
-                                (BNTransaction.getTxModule network customerAddress)
-                                bnTransaction.txId
-                                { from = fromAddress
-                                , to = toAddress
-                                , data = data
-                                }
-                            )
-
-                        _ ->
-                            ( Nothing, Console.log "Could not encode data for Fauceteer.drip" )
-            in
-            ( BNTransaction.appendTrx bnState trx, cmd )
-
-        FaucetTokenApprove network cTokenAddress underlyingAssetAddress customerAddress yesOrNo ->
-            -- function approve(address spender, uint256 amount) external returns (bool success)
-            let
-                cTokenAddressResult =
-                    FromEthereumUtils.contractAddressToEtherAddress cTokenAddress
-
-                amountBigInt =
-                    if yesOrNo then
-                        CompoundComponents.Ether.Helpers.negativeOne
-
-                    else
-                        BigInt.fromInt 0
-
-                dataResult =
-                    cTokenAddressResult
-                        |> Result.andThen
-                            (\spenderAddress ->
-                                FunctionSpec.encodeCall
-                                    "approve"
-                                    [ Value.Address spenderAddress
-                                    , Value.UInt 256 amountBigInt
-                                    ]
-                            )
-
-                customerAddressResult =
-                    FromEthereumUtils.customerAddressToEtherAddress customerAddress
-
-                underlyingAssetAddressResult =
-                    FromEthereumUtils.assetAddressToEtherAddress underlyingAssetAddress
-
-                ( trx, cmd ) =
-                    case ( customerAddressResult, underlyingAssetAddressResult, dataResult ) of
-                        ( Ok fromAddress, Ok toAddress, Ok data ) ->
-                            let
-                                cTokenAddressString =
-                                    Ethereum.getContractAddressString cTokenAddress
-
-                                bnTransaction =
-                                    BNTransaction.newTransaction network fromAddress toAddress "approve" [ cTokenAddressString ] bnState
-                            in
-                            ( Just bnTransaction
-                            , EtherWeb3.sendTransaction
-                                (BNTransaction.getTxModule network customerAddress)
-                                bnTransaction.txId
-                                { from = fromAddress
-                                , to = toAddress
-                                , data = data
-                                }
-                            )
-
-                        _ ->
-                            ( Nothing, Console.log "Could not encode data for Token.approve" )
-            in
-            ( BNTransaction.appendTrx bnState trx, cmd )
-
+        _ ->
+            ( bnState, Cmd.none )
 
 tokenSubscriptions : TokenState -> Sub TokenMsg
 tokenSubscriptions state =
@@ -400,11 +234,11 @@ isCAPFactoryApproved : Config -> TokenState -> Bool
 isCAPFactoryApproved config tokenState =
     let
         capFactoryAllowance =
-            case ( config.maybeCrowdProposalFactory, config.maybeCompToken ) of
-                ( Just capFactory, Just compToken ) ->
+            case config.maybeCompToken of
+                Just compToken ->
                     let
                         tokenAllownceKey =
-                            tokenAllowancesKey (contractAddressToAssetAddress compToken.address) capFactory
+                            tokenAllowancesKey (contractAddressToAssetAddress compToken.address) (Contract "0x0000000000000000000000000000000000000000")
                     in
                     Dict.get tokenAllownceKey tokenState.tokenAllowances
                         |> Maybe.withDefault Decimal.zero

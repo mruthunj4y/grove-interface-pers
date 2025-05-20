@@ -23,7 +23,7 @@
 
 header {
   padding: 1rem 0;
-  background: $color_dark_1;
+  background: $color_dark_2;
   min-height: 80px;
 
   &.dark-2 {
@@ -31,12 +31,12 @@ header {
   }
 
   .brand {
-    background-image: url(/images/compound-logo.svg);
+    background-image: url(/images/grove-logo-light.svg);
     background-repeat: no-repeat;
     background-size: contain;
     background-color: transparent;
-    width: 127px;
-    height: 27px;
+    width: 140px;
+    height: 30px;
   }
 
   .text-center a {
@@ -184,7 +184,7 @@ header {
     background: $color_light_1;
 
     .brand {
-      background-image: url(/images/compound-logo-dark.svg);
+      background-image: url(/images/grove-logo-dark.svg);
     }
 
     .text-center a {

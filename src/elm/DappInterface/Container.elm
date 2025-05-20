@@ -11,12 +11,12 @@ module DappInterface.Container exposing
     )
 
 import Balances
-import CompoundComponents.DisplayCurrency as DisplayCurrency exposing (DisplayCurrency(..))
-import CompoundComponents.Eth.Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..))
-import CompoundComponents.Eth.Network as Network exposing (Network)
-import CompoundComponents.Eth.ProviderInfo as EthProviderInfo
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (HrefLinkType(..), class, id, style)
-import CompoundComponents.Utils.Time
+import GroveComponents.DisplayCurrency as DisplayCurrency exposing (DisplayCurrency(..))
+import GroveComponents.Eth.Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..))
+import GroveComponents.Eth.Network as Network exposing (Network)
+import GroveComponents.Eth.ProviderInfo as EthProviderInfo
+import GroveComponents.Utils.GroveHtmlAttributes exposing (HrefLinkType(..), class, id, style)
+import GroveComponents.Utils.Time
 import DappInterface.BorrowingPane as BorrowingPane
 import DappInterface.CollateralPane as CollateralPane
 import DappInterface.MainModel
@@ -32,7 +32,7 @@ import DappInterface.OverviewHeader as OverviewHeader
 import DappInterface.Page exposing (Page(..))
 import Decimal exposing (Decimal)
 import Dict exposing (Dict)
-import Eth.Compound exposing (CompoundMsg)
+import Eth.Grove exposing (GroveMsg)
 import Eth.Config exposing (Config)
 import Eth.Oracle
 import Eth.Token exposing (CToken)
@@ -61,7 +61,7 @@ type InternalMsg
 
 
 type OutMsg
-    = WrappedCompoundMsg CompoundMsg
+    = WrappedGroveMsg GroveMsg
     | WrappedPreferencesMsg PreferencesMsg
 
 
@@ -74,7 +74,7 @@ type Msg
 type alias TranslationDictionary msg =
     { onContainerParentMsg : ParentMsg -> msg
     , onInternalMsg : InternalMsg -> msg
-    , onWrappedCompoundMsg : CompoundMsg -> msg
+    , onWrappedGroveMsg : GroveMsg -> msg
     , onWrappedPreferencesMsg : PreferencesMsg -> msg
     }
 
@@ -84,7 +84,7 @@ type alias Translator msg =
 
 
 translator : TranslationDictionary msg -> Translator msg
-translator { onContainerParentMsg, onInternalMsg, onWrappedCompoundMsg, onWrappedPreferencesMsg } msg =
+translator { onContainerParentMsg, onInternalMsg, onWrappedGroveMsg, onWrappedPreferencesMsg } msg =
     case msg of
         ForSelf internalMsg ->
             onInternalMsg internalMsg
@@ -92,8 +92,8 @@ translator { onContainerParentMsg, onInternalMsg, onWrappedCompoundMsg, onWrappe
         ForParent containerParentMsg ->
             onContainerParentMsg containerParentMsg
 
-        ForEthControllers (WrappedCompoundMsg compoundMsg) ->
-            onWrappedCompoundMsg compoundMsg
+        ForEthControllers (WrappedGroveMsg groveMsg) ->
+            onWrappedGroveMsg groveMsg
 
         ForEthControllers (WrappedPreferencesMsg preferencesMsg) ->
             onWrappedPreferencesMsg preferencesMsg
@@ -121,8 +121,8 @@ overviewHeaderMsgMapper overviewHeaderMsg =
 collateralPaneMsgMapper : CollateralPane.Msg -> Msg
 collateralPaneMsgMapper collateralPaneMsg =
     case collateralPaneMsg of
-        CollateralPane.ForCompoundController compoundMsg ->
-            ForEthControllers (WrappedCompoundMsg compoundMsg)
+        CollateralPane.ForGroveController groveMsg ->
+            ForEthControllers (WrappedGroveMsg groveMsg)
 
         CollateralPane.ForPreferences preferencesMsg ->
             ForEthControllers (WrappedPreferencesMsg preferencesMsg)
@@ -204,7 +204,7 @@ handleTimeTick oldBorrowingContainerModel mainModel currTime =
             Dict.values mainModel.tokenState.cTokens
 
         newBalanceTotalsUsd =
-            Balances.getUnderlyingTotalsInUsd mainModel.compoundState cTokens mainModel.oracleState
+            Balances.getUnderlyingTotalsInUsd mainModel.groveState cTokens mainModel.oracleState
 
         shouldUpdate =
             case oldBorrowingContainerModel.maybeCurrentAnimatedBalances of
@@ -232,7 +232,7 @@ handleTimeTick oldBorrowingContainerModel mainModel currTime =
     in
     case currAnimatedBalancesUpdate.maybeLastBalancesChangeTimestamp of
         Just lastChangeTimestamp ->
-            if CompoundComponents.Utils.Time.differenceInSeconds currTime lastChangeTimestamp > 2 then
+            if GroveComponents.Utils.Time.differenceInSeconds currTime lastChangeTimestamp > 2 then
                 -- This is getting the model to begin the next slot machine animation.
                 { currAnimatedBalancesUpdate
                     | maybePreviousAnimatedBalances = currAnimatedBalancesUpdate.maybeCurrentAnimatedBalances
@@ -265,11 +265,9 @@ invalidNetwork maybeNetwork configs =
 testNetwork : Maybe Network -> Maybe String
 testNetwork maybeNetwork =
     case maybeNetwork of
-        Just Network.MainNet ->
-            Nothing
 
-        Just network ->
-            Just (Network.networkName network)
+        Just Network.Xrplevm ->
+            Nothing
 
         _ ->
             Nothing
@@ -333,7 +331,7 @@ view mainModel =
 
 
 borrowingLimitPopoverView : Maybe Decimal -> Model -> Html Msg
-borrowingLimitPopoverView maybeEtherUsdPrice ({ borrowingContainerState, compoundState, oracleState, tokenState, preferences, userLanguage } as mainModel) =
+borrowingLimitPopoverView maybeEtherUsdPrice ({ borrowingContainerState, groveState, oracleState, tokenState, preferences, userLanguage } as mainModel) =
     let
         px f =
             String.fromFloat f ++ "px"
@@ -342,13 +340,13 @@ borrowingLimitPopoverView maybeEtherUsdPrice ({ borrowingContainerState, compoun
             Dict.values tokenState.cTokens
 
         balanceTotalsUsd =
-            Balances.getUnderlyingTotalsInUsd compoundState cTokens oracleState
+            Balances.getUnderlyingTotalsInUsd groveState cTokens oracleState
 
         hasAnyBorrowBalance =
             Decimal.gt balanceTotalsUsd.totalBorrow Decimal.zero
 
         accountLiquidityUsd =
-            compoundState.maybeAccountLiquidityUsd
+            groveState.maybeAccountLiquidityUsd
                 |> Maybe.withDefault Decimal.zero
 
         --Total Borrow Limit is AccountLiquidity + TotalBorrowBalance

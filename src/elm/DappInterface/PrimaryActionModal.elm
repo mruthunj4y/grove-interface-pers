@@ -4,7 +4,7 @@ module DappInterface.PrimaryActionModal exposing
     , TranslationDictionary
     , Translator
     , handleBNTransactionUpdate
-    , handleCompoundUpdate
+    , handleGroveUpdate
     , handleTokenUpdate
     , handleTransactionUpdate
     , prepareToShowModal
@@ -15,26 +15,26 @@ module DappInterface.PrimaryActionModal exposing
 
 import Balances
 import Browser.Dom
-import CompoundComponents.Console as Console
-import CompoundComponents.DisplayCurrency as DisplayCurrency
-import CompoundComponents.Eth.ConnectedEthWallet as ConnectedEthWallet
-import CompoundComponents.Eth.Ethereum as Ethereum exposing (Account(..), ContractAddress(..))
-import CompoundComponents.Eth.Network as Network exposing (Network)
-import CompoundComponents.Ether.BNTransaction as BNTransaction exposing (BNTransactionMsg)
-import CompoundComponents.Functions as Functions
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (HrefLinkType(..), autocomplete, class, href, id, onClickStopPropagation, placeholder, style, target, type_, value)
-import CompoundComponents.Utils.Markup exposing (disabled)
-import CompoundComponents.Utils.NumberFormatter as NumberFormatter exposing (formatPercentageWithDots, formatRate)
+import GroveComponents.Console as Console
+import GroveComponents.DisplayCurrency as DisplayCurrency
+import GroveComponents.Eth.ConnectedEthWallet as ConnectedEthWallet
+import GroveComponents.Eth.Ethereum as Ethereum exposing (Account(..), ContractAddress(..))
+import GroveComponents.Eth.Network as Network exposing (Network)
+import GroveComponents.Ether.BNTransaction as BNTransaction exposing (BNTransactionMsg)
+import GroveComponents.Functions as Functions
+import GroveComponents.Utils.GroveHtmlAttributes exposing (HrefLinkType(..), autocomplete, class, href, id, onClickStopPropagation, placeholder, style, target, type_, value)
+import GroveComponents.Utils.Markup exposing (disabled)
+import GroveComponents.Utils.NumberFormatter as NumberFormatter exposing (formatPercentageWithDots, formatRate)
 import DappInterface.BorrowingPane
 import DappInterface.CollateralPane
 import DappInterface.Container
 import DappInterface.MainModel exposing (BorrowingRisk(..), Model, PrimaryActionModalInput(..), PrimaryActionModalState, PrimaryActionType(..), getBorrowingRisk, getCurrentConfig)
 import Decimal exposing (Decimal)
 import Dict
-import Eth.Compound exposing (CompoundMsg, CompoundState, cTokenIsApproved)
+import Eth.Grove exposing (GroveMsg, GroveState, cTokenIsApproved)
 import Eth.Config exposing (Config)
 import Eth.Oracle exposing (OracleState)
-import Eth.Token exposing (CToken, TokenMsg, TokenState)
+import Eth.Token exposing (CToken, TokenMsg(..), TokenState)
 import Eth.Transaction exposing (Transaction, TransactionMsg)
 import Eth.Validations exposing (hasSufficientBalanceForSupply, hasSufficientCollateralForBorrow)
 import Html exposing (Html, a, button, div, input, label, p, span, text)
@@ -60,14 +60,14 @@ type InternalMsg
 type Msg
     = ForSelf InternalMsg
     | ForParent ParentMsg
-    | WrappedCompoundMsg CompoundMsg
+    | WrappedGroveMsg GroveMsg
     | WrappedTokenMsg TokenMsg
 
 
 type alias TranslationDictionary msg =
     { onInternalMessage : InternalMsg -> msg
     , onParentMsg : ParentMsg -> msg
-    , onWrappedCompoundMsg : CompoundMsg -> msg
+    , onWrappedGroveMsg : GroveMsg -> msg
     , onWrappedTokenMsg : TokenMsg -> msg
     }
 
@@ -77,7 +77,7 @@ type alias Translator msg =
 
 
 translator : TranslationDictionary msg -> Translator msg
-translator { onInternalMessage, onParentMsg, onWrappedCompoundMsg, onWrappedTokenMsg } msg =
+translator { onInternalMessage, onParentMsg, onWrappedGroveMsg, onWrappedTokenMsg } msg =
     case msg of
         ForSelf internal ->
             onInternalMessage internal
@@ -85,8 +85,8 @@ translator { onInternalMessage, onParentMsg, onWrappedCompoundMsg, onWrappedToke
         ForParent parentMsg ->
             onParentMsg parentMsg
 
-        WrappedCompoundMsg tokenMsg ->
-            onWrappedCompoundMsg tokenMsg
+        WrappedGroveMsg tokenMsg ->
+            onWrappedGroveMsg tokenMsg
 
         WrappedTokenMsg tokenMsg ->
             onWrappedTokenMsg tokenMsg
@@ -174,8 +174,8 @@ getModalInput newText =
         Normal ( newText, Decimal.fromString newText )
 
 
-update : Account -> CompoundState -> TokenState -> OracleState -> InternalMsg -> PrimaryActionModalState -> ( PrimaryActionModalState, Cmd Msg )
-update account compoundState tokenState oracleState msg state =
+update : Account -> GroveState -> TokenState -> OracleState -> InternalMsg -> PrimaryActionModalState -> ( PrimaryActionModalState, Cmd Msg )
+update account groveState tokenState oracleState msg state =
     case msg of
         ChangeActionType newActionType ->
             let
@@ -208,7 +208,7 @@ update account compoundState tokenState oracleState msg state =
                         MintAction ->
                             let
                                 walletBalance =
-                                    Balances.getWalletBalanceSafeEther config account compoundState chosenAsset
+                                    Balances.getWalletBalanceSafeEther config account groveState chosenAsset
                                         |> Maybe.withDefault Decimal.zero
                             in
                             Normal ( truncatedInputString walletBalance, Just walletBalance )
@@ -216,12 +216,12 @@ update account compoundState tokenState oracleState msg state =
                         RedeemAction ->
                             let
                                 tokenSupplyBalance =
-                                    Balances.getUnderlyingBalances compoundState chosenAsset.contractAddress
+                                    Balances.getUnderlyingBalances groveState chosenAsset.contractAddress
                                         |> Maybe.map .underlyingSupplyBalance
                                         |> Maybe.withDefault Decimal.zero
 
                                 maxSafeWithdraw =
-                                    Utils.SafeLiquidity.getSafeMaxWithdrawForToken config compoundState tokenState oracleState chosenAsset tokenSupplyBalance
+                                    Utils.SafeLiquidity.getSafeMaxWithdrawForToken config groveState tokenState oracleState chosenAsset tokenSupplyBalance
                             in
                             if Decimal.lte tokenSupplyBalance maxSafeWithdraw then
                                 Max
@@ -232,18 +232,18 @@ update account compoundState tokenState oracleState msg state =
                         BorrowAction ->
                             let
                                 maxSafeBorrow =
-                                    Utils.SafeLiquidity.getSafeMaxBorrowForToken compoundState tokenState oracleState chosenAsset.underlying
+                                    Utils.SafeLiquidity.getSafeMaxBorrowForToken groveState tokenState oracleState chosenAsset.underlying
                             in
                             Normal ( truncatedInputString maxSafeBorrow, Just maxSafeBorrow )
 
                         RepayBorrowAction ->
                             let
                                 walletBalance =
-                                    Balances.getWalletBalanceSafeEther config account compoundState chosenAsset
+                                    Balances.getWalletBalanceSafeEther config account groveState chosenAsset
                                         |> Maybe.withDefault Decimal.zero
 
                                 borrowBalance =
-                                    Balances.getUnderlyingBalances compoundState chosenAsset.contractAddress
+                                    Balances.getUnderlyingBalances groveState chosenAsset.contractAddress
                                         |> Maybe.map .underlyingBorrowBalance
                                         |> Maybe.withDefault Decimal.zero
                             in
@@ -262,8 +262,8 @@ update account compoundState tokenState oracleState msg state =
             ( { state | errors = error :: state.errors }, Console.error error )
 
 
-handleCompoundUpdate : CompoundMsg -> PrimaryActionModalState -> PrimaryActionModalState
-handleCompoundUpdate compoundMsg ({ chosenAsset, inputActionPaneState } as state) =
+handleGroveUpdate : GroveMsg -> PrimaryActionModalState -> PrimaryActionModalState
+handleGroveUpdate groveMsg ({ chosenAsset, inputActionPaneState } as state) =
     let
         updateStateIfCorrectAsset : Ethereum.ContractAddress -> PrimaryActionModalState
         updateStateIfCorrectAsset targetContractAddress =
@@ -273,17 +273,17 @@ handleCompoundUpdate compoundMsg ({ chosenAsset, inputActionPaneState } as state
             else
                 state
     in
-    case compoundMsg of
-        Eth.Compound.Web3TransactionMsg (Eth.Compound.CTokenMint _ contractAddress _ _ _) ->
+    case groveMsg of
+        Eth.Grove.Web3TransactionMsg (Eth.Grove.CTokenMint _ contractAddress _ _ _) ->
             updateStateIfCorrectAsset contractAddress
 
-        Eth.Compound.Web3TransactionMsg (Eth.Compound.CTokenRedeem _ contractAddress _ _ _ _ _) ->
+        Eth.Grove.Web3TransactionMsg (Eth.Grove.CTokenRedeem _ contractAddress _ _ _ _ _) ->
             updateStateIfCorrectAsset contractAddress
 
-        Eth.Compound.Web3TransactionMsg (Eth.Compound.CTokenBorrow _ contractAddress _ _ _) ->
+        Eth.Grove.Web3TransactionMsg (Eth.Grove.CTokenBorrow _ contractAddress _ _ _) ->
             updateStateIfCorrectAsset contractAddress
 
-        Eth.Compound.Web3TransactionMsg (Eth.Compound.CTokenRepayBorrow _ contractAddress _ _ _) ->
+        Eth.Grove.Web3TransactionMsg (Eth.Grove.CTokenRepayBorrow _ contractAddress _ _ _) ->
             updateStateIfCorrectAsset contractAddress
 
         _ ->
@@ -291,16 +291,22 @@ handleCompoundUpdate compoundMsg ({ chosenAsset, inputActionPaneState } as state
 
 
 handleTokenUpdate : TokenMsg -> PrimaryActionModalState -> PrimaryActionModalState
-handleTokenUpdate tokenMsg ({ chosenAsset } as state) =
+handleTokenUpdate tokenMsg state =
     case tokenMsg of
-        Eth.Token.Web3TransactionMsg (Eth.Token.FaucetTokenApprove network cTokenAddress _ _ _) ->
-            if cTokenAddress == chosenAsset.contractAddress then
-                { state | inputActionPaneState = DappInterface.MainModel.AwaitingConfirmTransaction }
+        Eth.Token.SetTokenAllowance { asset, contract, customer, allowance } ->
+            -- Update state when token allowance changes
+            { state | inputActionPaneState = DappInterface.MainModel.ChoosingInputs }
 
-            else
-                state
+        Eth.Token.SetInfuraEtherUSD _ ->
+            -- Update state when ether price changes
+            { state | inputActionPaneState = DappInterface.MainModel.ChoosingInputs }
 
-        _ ->
+        Eth.Token.Web3TransactionMsg ->
+            -- Update state when web3 transaction occurs
+            { state | inputActionPaneState = DappInterface.MainModel.AwaitingConfirmTransaction }
+
+        Eth.Token.Error _ ->
+            -- Keep state unchanged on error
             state
 
 
@@ -376,7 +382,7 @@ inputActionPane userLanguage maybeConfig maybeEtherUsdPrice primaryActionModalSt
         ( tokenApproved, maybePendingTransaction ) =
             case maybeConfig of
                 Just config ->
-                    ( cTokenIsApproved config primaryActionModalState.chosenAsset mainModel.compoundState
+                    ( cTokenIsApproved config primaryActionModalState.chosenAsset mainModel.groveState
                     , getMostRecentAssetPendingTransaction config primaryActionModalState mainModel
                     )
 
@@ -515,7 +521,7 @@ assetAndCompRateForm userLanguage config maybeEtherUsdPrice ({ chosenAsset, prim
                 )
 
         interestRate =
-            interestRateForType chosenAsset primaryActionModalState mainModel.compoundState
+            interestRateForType chosenAsset primaryActionModalState mainModel.groveState
 
         tokenValueUsd =
             Eth.Oracle.getOraclePrice mainModel.oracleState chosenAsset.underlying
@@ -528,7 +534,7 @@ assetAndCompRateForm userLanguage config maybeEtherUsdPrice ({ chosenAsset, prim
             Ethereum.getContractAddressString primaryActionModalState.chosenAsset.contractAddress
 
         ( marketTotalUSDValue, compSpeedPerDay ) =
-            mainModel.compoundState.cTokensMetadata
+            mainModel.groveState.cTokensMetadata
                 |> Dict.get cTokenAddressString
                 |> Maybe.map
                     (\cTokenMetadata ->
@@ -616,13 +622,7 @@ enableAssetView userLanguage config maybeEtherUsdPrice ({ chosenAsset, primaryAc
                 ( Just network, Acct customerAddress _ ) ->
                     let
                         enableClickAction =
-                            Eth.Token.FaucetTokenApprove
-                                network
-                                chosenAsset.contractAddress
-                                chosenAsset.underlying.assetAddress
-                                customerAddress
-                                True
-                                |> Eth.Token.Web3TransactionMsg
+                            Eth.Token.Web3TransactionMsg
                                 |> WrappedTokenMsg
                     in
                     button [ class ("submit-button button main" ++ buttonTypeClass), onClick enableClickAction ] [ text (Translations.enable userLanguage) ]
@@ -663,9 +663,6 @@ awaitingWeb3ConfirmView userLanguage { primaryActionType } { connectedEthWalletM
                 Just ConnectedEthWallet.Metamask ->
                     Translations.confirm_the_transaction_with userLanguage (Translations.metamask userLanguage)
 
-                Just ConnectedEthWallet.WalletLink ->
-                    Translations.confirm_the_transaction_with userLanguage (Translations.coinbase_wallet userLanguage)
-
                 Just ConnectedEthWallet.Ledger ->
                     Translations.confirm_the_transaction_with userLanguage (Translations.ledger userLanguage)
 
@@ -702,7 +699,7 @@ awaitingPendingTransactionView transaction { primaryActionType } { network, user
                 network
                 (Ethereum.TransactionHash transaction.trxHash)
                 [ class ("etherscan-button button main" ++ buttonTypeClass) ]
-                [ text (Translations.view_on_etherscan userLanguage) ]
+                [ text (Translations.view_on_xrpl_explorer userLanguage) ]
     in
     div [ class "enable-asset extra-bottom-margin" ]
         [ div [ class ("connecting-ring" ++ connectingRingTypeClass) ]
@@ -720,13 +717,13 @@ supplyAndRedeemCollateralView userLanguage config maybeEtherUsdPrice ({ chosenAs
             Dict.values mainModel.tokenState.cTokens
 
         balanceTotalsUsd =
-            Balances.getUnderlyingTotalsInUsd mainModel.compoundState cTokens mainModel.oracleState
+            Balances.getUnderlyingTotalsInUsd mainModel.groveState cTokens mainModel.oracleState
 
         maxAvailableTokens =
             getAvailableTokensForAction (Just config) primaryActionModalState mainModel
 
         preActionBorrowLimitUsd =
-            Utils.SafeLiquidity.getCurrentBorrowLimitUsd mainModel.compoundState mainModel.tokenState mainModel.oracleState
+            Utils.SafeLiquidity.getCurrentBorrowLimitUsd mainModel.groveState mainModel.tokenState mainModel.oracleState
 
         tokenValueUsd =
             Eth.Oracle.getOraclePrice mainModel.oracleState chosenAsset.underlying
@@ -744,7 +741,7 @@ supplyAndRedeemCollateralView userLanguage config maybeEtherUsdPrice ({ chosenAs
                     Decimal.zero
 
         collateralFactor =
-            mainModel.compoundState.cTokensMetadata
+            mainModel.groveState.cTokensMetadata
                 |> Dict.get (Ethereum.getContractAddressString chosenAsset.contractAddress)
                 |> Maybe.map .collateralFactor
                 |> Maybe.withDefault Decimal.zero
@@ -754,7 +751,7 @@ supplyAndRedeemCollateralView userLanguage config maybeEtherUsdPrice ({ chosenAs
                 |> Decimal.mul collateralFactor
 
         postActionBorrowLimitUsd =
-            case ( Balances.hasEnteredAsset config mainModel.compoundState chosenAsset, primaryActionType ) of
+            case ( Balances.hasEnteredAsset config mainModel.groveState chosenAsset, primaryActionType ) of
                 ( True, MintAction ) ->
                     Decimal.add preActionBorrowLimitUsd inputWithCollateralFactor
 
@@ -812,7 +809,6 @@ supplyAndRedeemCollateralView userLanguage config maybeEtherUsdPrice ({ chosenAs
                 [ getSubmitButton userLanguage config primaryActionModalState mainModel
                 ]
             , bottomBalanceView userLanguage config primaryActionModalState mainModel
-            , faucetAllocateButton config mainModel chosenAsset
             ]
         ]
 
@@ -853,7 +849,7 @@ borrowAndRepayView userLanguage config maybeEtherUsdPrice ({ chosenAsset, inputV
                 Decimal.sub preActionBorrowBalanceUsd inputValueAsUsd
 
         currentBorrowLimitUsd =
-            Utils.SafeLiquidity.getCurrentBorrowLimitUsd mainModel.compoundState mainModel.tokenState mainModel.oracleState
+            Utils.SafeLiquidity.getCurrentBorrowLimitUsd mainModel.groveState mainModel.tokenState mainModel.oracleState
 
         newBorrowBalancePercentOfLimit =
             (case Decimal.fastdiv postActionBorrowBalanceUsd currentBorrowLimitUsd of
@@ -916,16 +912,16 @@ getSubmitButton userLanguage config ({ chosenAsset, inputValue, primaryActionTyp
         actionConstructor panelMessage amount =
             case ( mainModel.network, mainModel.account ) of
                 ( Just actualNetwork, Acct customerAddress _ ) ->
-                    WrappedCompoundMsg <| Eth.Compound.Web3TransactionMsg <| panelMessage actualNetwork chosenAsset.contractAddress chosenAsset.underlying.decimals customerAddress amount
+                    WrappedGroveMsg <| Eth.Grove.Web3TransactionMsg <| panelMessage actualNetwork chosenAsset.contractAddress chosenAsset.underlying.decimals customerAddress amount
 
                 _ ->
                     Error "Should not show submit button with no account or config"
                         |> ForSelf
 
         redeemConstructor panelMessage amount =
-            case ( mainModel.network, mainModel.account, Dict.get (Ethereum.getContractAddressString chosenAsset.contractAddress) mainModel.compoundState.cTokensMetadata ) of
+            case ( mainModel.network, mainModel.account, Dict.get (Ethereum.getContractAddressString chosenAsset.contractAddress) mainModel.groveState.cTokensMetadata ) of
                 ( Just actualNetwork, Acct customerAddress _, Just cTokenMetadata ) ->
-                    WrappedCompoundMsg <| Eth.Compound.Web3TransactionMsg <| panelMessage actualNetwork chosenAsset.contractAddress cTokenMetadata.exchangeRate chosenAsset.decimals chosenAsset.underlying.decimals customerAddress amount
+                    WrappedGroveMsg <| Eth.Grove.Web3TransactionMsg <| panelMessage actualNetwork chosenAsset.contractAddress cTokenMetadata.exchangeRate chosenAsset.decimals chosenAsset.underlying.decimals customerAddress amount
 
                 _ ->
                     ForSelf (Error "Tried to config withdraw submit button without exchangeRate or account.")
@@ -935,7 +931,7 @@ getSubmitButton userLanguage config ({ chosenAsset, inputValue, primaryActionTyp
                 Decimal.fromInt 1000000000000000
 
             else
-                Dict.get (Ethereum.getContractAddressString chosenAsset.contractAddress) mainModel.compoundState.balances
+                Dict.get (Ethereum.getContractAddressString chosenAsset.contractAddress) mainModel.groveState.balances
                     |> Maybe.map .underlyingTokenAllowance
                     |> Maybe.withDefault Decimal.zero
 
@@ -959,9 +955,9 @@ getSubmitButton userLanguage config ({ chosenAsset, inputValue, primaryActionTyp
                     , insufficientWord = Translations.no_funds_available userLanguage
                     , maxAmount = Decimal.zero
                     , buttonClass = "main"
-                    , message = actionConstructor Eth.Compound.CTokenMint
+                    , message = actionConstructor Eth.Grove.CTokenMint
                     , qualifier =
-                        hasSufficientBalanceForSupply config mainModel.account mainModel.compoundState chosenAsset
+                        hasSufficientBalanceForSupply config mainModel.account mainModel.groveState chosenAsset
                     }
 
                 RedeemAction ->
@@ -970,7 +966,7 @@ getSubmitButton userLanguage config ({ chosenAsset, inputValue, primaryActionTyp
                     , insufficientWord = Translations.insufficient_liquidity userLanguage
                     , maxAmount = Decimal.minusOne
                     , buttonClass = "main"
-                    , message = redeemConstructor Eth.Compound.CTokenRedeem
+                    , message = redeemConstructor Eth.Grove.CTokenRedeem
                     , qualifier = Decimal.gte availableTokenBalance
                     }
 
@@ -980,9 +976,9 @@ getSubmitButton userLanguage config ({ chosenAsset, inputValue, primaryActionTyp
                     , insufficientWord = Translations.insufficient_collateral userLanguage
                     , maxAmount = availableTokenBalance
                     , buttonClass = "borrow"
-                    , message = actionConstructor Eth.Compound.CTokenBorrow
+                    , message = actionConstructor Eth.Grove.CTokenBorrow
                     , qualifier =
-                        hasSufficientCollateralForBorrow mainModel.compoundState.maybeAccountLiquidityUsd mainModel.oracleState chosenAsset.underlying
+                        hasSufficientCollateralForBorrow mainModel.groveState.maybeAccountLiquidityUsd mainModel.oracleState chosenAsset.underlying
                     }
 
                 RepayBorrowAction ->
@@ -991,7 +987,7 @@ getSubmitButton userLanguage config ({ chosenAsset, inputValue, primaryActionTyp
                     , insufficientWord = Translations.no_funds_available userLanguage
                     , maxAmount = Decimal.minusOne
                     , buttonClass = "borrow"
-                    , message = actionConstructor Eth.Compound.CTokenRepayBorrow
+                    , message = actionConstructor Eth.Grove.CTokenRepayBorrow
                     , qualifier = Decimal.gte availableTokenBalance
                     }
 
@@ -1016,7 +1012,7 @@ getSubmitButton userLanguage config ({ chosenAsset, inputValue, primaryActionTyp
                 Max ->
                     let
                         borrowBalance =
-                            Balances.getUnderlyingBalances mainModel.compoundState chosenAsset.contractAddress
+                            Balances.getUnderlyingBalances mainModel.groveState chosenAsset.contractAddress
                                 |> Maybe.map .underlyingBorrowBalance
                                 |> Maybe.withDefault Decimal.zero
                     in
@@ -1046,7 +1042,7 @@ getSubmitButton userLanguage config ({ chosenAsset, inputValue, primaryActionTyp
                             panelData.maxAmount
 
                 maybeCTokenMetadata =
-                    Dict.get (Ethereum.getContractAddressString chosenAsset.contractAddress) mainModel.compoundState.cTokensMetadata
+                    Dict.get (Ethereum.getContractAddressString chosenAsset.contractAddress) mainModel.groveState.cTokensMetadata
 
                 borrowCap =
                     maybeCTokenMetadata
@@ -1070,7 +1066,7 @@ getSubmitButton userLanguage config ({ chosenAsset, inputValue, primaryActionTyp
 
         supplyingAndBorrowingPaused =
             case ( mainModel.network, chosenAsset.symbol ) of
-                ( Just Network.MainNet, "cWBTC" ) ->
+                ( Just Network.Xrplevm, "gWBTC" ) ->
                     primaryActionType == MintAction || primaryActionType == BorrowAction
 
                 _ ->
@@ -1081,7 +1077,7 @@ getSubmitButton userLanguage config ({ chosenAsset, inputValue, primaryActionTyp
                 -- Repay is the only special one we want different text for
                 let
                     borrowBalance =
-                        Balances.getUnderlyingBalances mainModel.compoundState chosenAsset.contractAddress
+                        Balances.getUnderlyingBalances mainModel.groveState chosenAsset.contractAddress
                             |> Maybe.map .underlyingBorrowBalance
                             |> Maybe.withDefault Decimal.zero
 
@@ -1114,27 +1110,27 @@ bottomBalanceView userLanguage config { chosenAsset, primaryActionType } mainMod
             case primaryActionType of
                 MintAction ->
                     ( Translations.wallet_balance userLanguage
-                    , Balances.getWalletBalanceSafeEther config mainModel.account mainModel.compoundState chosenAsset
+                    , Balances.getWalletBalanceSafeEther config mainModel.account mainModel.groveState chosenAsset
                         |> Maybe.withDefault Decimal.zero
                     )
 
                 RedeemAction ->
                     ( Translations.currently_supplying userLanguage
-                    , Balances.getUnderlyingBalances mainModel.compoundState chosenAsset.contractAddress
+                    , Balances.getUnderlyingBalances mainModel.groveState chosenAsset.contractAddress
                         |> Maybe.map .underlyingSupplyBalance
                         |> Maybe.withDefault Decimal.zero
                     )
 
                 BorrowAction ->
                     ( Translations.currently_borrowing userLanguage
-                    , Balances.getUnderlyingBalances mainModel.compoundState chosenAsset.contractAddress
+                    , Balances.getUnderlyingBalances mainModel.groveState chosenAsset.contractAddress
                         |> Maybe.map .underlyingBorrowBalance
                         |> Maybe.withDefault Decimal.zero
                     )
 
                 RepayBorrowAction ->
                     ( Translations.wallet_balance userLanguage
-                    , Balances.getWalletBalanceSafeEther config mainModel.account mainModel.compoundState chosenAsset
+                    , Balances.getWalletBalanceSafeEther config mainModel.account mainModel.groveState chosenAsset
                         |> Maybe.withDefault Decimal.zero
                     )
 
@@ -1147,34 +1143,6 @@ bottomBalanceView userLanguage config { chosenAsset, primaryActionType } mainMod
             , span [] [ text (tokenFormatter balanceToShow) ]
             ]
         ]
-
-
-faucetAllocateButton : Config -> Model -> CToken -> Html Msg
-faucetAllocateButton config { account, network, userLanguage } chosenAsset =
-    case ( network, account, config.maybeFauceteer ) of
-        ( Just actualNetwork, Acct customerAddress _, Just fauceteerAddress ) ->
-            if config.cEtherToken.address /= chosenAsset.contractAddress && actualNetwork /= Network.MainNet then
-                a [ class "faucet-link", onClick <| WrappedTokenMsg <| Eth.Token.Web3TransactionMsg (Eth.Token.FauceteerDrip actualNetwork fauceteerAddress chosenAsset.contractAddress chosenAsset.underlying.assetAddress customerAddress) ]
-                    [ text (Translations.faucet userLanguage) ]
-
-            else
-                text ""
-
-        ( Just actualNetwork, Acct customerAddress _, Nothing ) ->
-            if
-                (config.cEtherToken.address /= chosenAsset.contractAddress && actualNetwork /= Network.MainNet)
-                    && not (actualNetwork == Network.Kovan && (chosenAsset.symbol == "cSAI" || chosenAsset.symbol == "cDAI"))
-                    && not (actualNetwork == Network.Ropsten && (chosenAsset.symbol == "cTBTC" || chosenAsset.symbol == "cUSDT"))
-            then
-                a [ class "faucet-link", onClick <| WrappedTokenMsg <| Eth.Token.Web3TransactionMsg (Eth.Token.FaucetTokenAllocate actualNetwork chosenAsset.contractAddress chosenAsset.underlying.assetAddress customerAddress chosenAsset.underlying.decimals) ]
-                    [ text (Translations.faucet userLanguage) ]
-
-            else
-                text ""
-
-        _ ->
-            text ""
-
 
 
 -- HELPERS
@@ -1200,11 +1168,11 @@ getMostRecentAssetPendingTransaction config { chosenAsset } { currentTime, netwo
         |> List.head
 
 
-interestRateForType : CToken -> PrimaryActionModalState -> CompoundState -> Maybe Decimal
-interestRateForType cToken { primaryActionType } compoundState =
+interestRateForType : CToken -> PrimaryActionModalState -> GroveState -> Maybe Decimal
+interestRateForType cToken { primaryActionType } groveState =
     let
         cTokenTnterestRates =
-            Balances.getInterestRate compoundState.cTokensMetadata cToken.contractAddress
+            Balances.getInterestRate groveState.cTokensMetadata cToken.contractAddress
 
         maybeCurrentRate =
             case primaryActionType of
@@ -1224,10 +1192,10 @@ interestRateForType cToken { primaryActionType } compoundState =
 
 
 getAvailableTokensForAction : Maybe Config -> PrimaryActionModalState -> Model -> Decimal
-getAvailableTokensForAction maybeConfig { chosenAsset, primaryActionType } { account, compoundState, tokenState, oracleState } =
+getAvailableTokensForAction maybeConfig { chosenAsset, primaryActionType } { account, groveState, tokenState, oracleState } =
     let
         underlyingBalances =
-            Balances.getUnderlyingBalances compoundState chosenAsset.contractAddress
+            Balances.getUnderlyingBalances groveState chosenAsset.contractAddress
 
         ( supplyBalance, borrowBalance ) =
             case account of
@@ -1244,9 +1212,9 @@ getAvailableTokensForAction maybeConfig { chosenAsset, primaryActionType } { acc
         ( walletBalance, absoluteMaxWithdraw ) =
             case maybeConfig of
                 Just config ->
-                    ( Balances.getWalletBalanceSafeEther config account compoundState chosenAsset
+                    ( Balances.getWalletBalanceSafeEther config account groveState chosenAsset
                         |> Maybe.withDefault Decimal.zero
-                    , Utils.SafeLiquidity.getAbsoluteMaxWithdrawForToken config compoundState tokenState oracleState chosenAsset supplyBalance
+                    , Utils.SafeLiquidity.getAbsoluteMaxWithdrawForToken config groveState tokenState oracleState chosenAsset supplyBalance
                     )
 
                 Nothing ->
@@ -1255,7 +1223,7 @@ getAvailableTokensForAction maybeConfig { chosenAsset, primaryActionType } { acc
                     )
 
         absoluteMaxBorrow =
-            Utils.SafeLiquidity.getAbsoluteMaxBorrowForToken compoundState oracleState chosenAsset.underlying
+            Utils.SafeLiquidity.getAbsoluteMaxBorrowForToken groveState oracleState chosenAsset.underlying
     in
     case primaryActionType of
         -- Wallet Balance
@@ -1357,7 +1325,7 @@ getInputBox config ({ primaryActionType, inputValue } as primaryActionModalState
 
 
 getMaxButton : Translations.Lang -> Config -> PrimaryActionModalState -> Model -> Html Msg
-getMaxButton userLanguage config { chosenAsset, primaryActionType } { tokenState, compoundState, oracleState } =
+getMaxButton userLanguage config { chosenAsset, primaryActionType } { tokenState, groveState, oracleState } =
     let
         maxButtonText =
             case primaryActionType of
@@ -1367,15 +1335,15 @@ getMaxButton userLanguage config { chosenAsset, primaryActionType } { tokenState
                 RedeemAction ->
                     let
                         supplyBalance =
-                            Balances.getUnderlyingBalances compoundState chosenAsset.contractAddress
+                            Balances.getUnderlyingBalances groveState chosenAsset.contractAddress
                                 |> Maybe.map .underlyingSupplyBalance
                                 |> Maybe.withDefault Decimal.zero
 
                         maxSafeWithdraw =
-                            Utils.SafeLiquidity.getSafeMaxWithdrawForToken config compoundState tokenState oracleState chosenAsset supplyBalance
+                            Utils.SafeLiquidity.getSafeMaxWithdrawForToken config groveState tokenState oracleState chosenAsset supplyBalance
 
                         absoluteMaxWithdraw =
-                            Utils.SafeLiquidity.getAbsoluteMaxWithdrawForToken config compoundState tokenState oracleState chosenAsset supplyBalance
+                            Utils.SafeLiquidity.getAbsoluteMaxWithdrawForToken config groveState tokenState oracleState chosenAsset supplyBalance
                     in
                     if Decimal.lt maxSafeWithdraw absoluteMaxWithdraw then
                         div []
@@ -1405,7 +1373,7 @@ borrowLimitWithAdjustedInputView config maybeEtherUsdPrice ({ chosenAsset, prima
             getAvailableTokensForAction (Just config) primaryActionModalState mainModel
 
         preActionBorrowLimitUsd =
-            Utils.SafeLiquidity.getCurrentBorrowLimitUsd mainModel.compoundState mainModel.tokenState mainModel.oracleState
+            Utils.SafeLiquidity.getCurrentBorrowLimitUsd mainModel.groveState mainModel.tokenState mainModel.oracleState
 
         tokenValueUsd =
             Eth.Oracle.getOraclePrice mainModel.oracleState chosenAsset.underlying
@@ -1423,7 +1391,7 @@ borrowLimitWithAdjustedInputView config maybeEtherUsdPrice ({ chosenAsset, prima
                     ( False, Decimal.zero )
 
         collateralFactor =
-            mainModel.compoundState.cTokensMetadata
+            mainModel.groveState.cTokensMetadata
                 |> Dict.get (Ethereum.getContractAddressString chosenAsset.contractAddress)
                 |> Maybe.map .collateralFactor
                 |> Maybe.withDefault Decimal.zero
@@ -1433,7 +1401,7 @@ borrowLimitWithAdjustedInputView config maybeEtherUsdPrice ({ chosenAsset, prima
                 |> Decimal.mul collateralFactor
 
         postActionBorrowLimitUsd =
-            case ( Balances.hasEnteredAsset config mainModel.compoundState chosenAsset, primaryActionType ) of
+            case ( Balances.hasEnteredAsset config mainModel.groveState chosenAsset, primaryActionType ) of
                 ( True, MintAction ) ->
                     Decimal.add preActionBorrowLimitUsd inputWithCollateralFactor
 
@@ -1543,18 +1511,18 @@ borrowLimitUsedWithAdjustedInputView config ({ chosenAsset, primaryActionType, i
                 |> Decimal.mul tokenValueUsd
 
         currentBorrowLimitUsd =
-            Utils.SafeLiquidity.getCurrentBorrowLimitUsd mainModel.compoundState mainModel.tokenState mainModel.oracleState
+            Utils.SafeLiquidity.getCurrentBorrowLimitUsd mainModel.groveState mainModel.tokenState mainModel.oracleState
 
         ( postActionBorrowBalanceUsd, postActionBorrowLimitUsd ) =
             let
                 collateralFactor =
-                    mainModel.compoundState.cTokensMetadata
+                    mainModel.groveState.cTokensMetadata
                         |> Dict.get (Ethereum.getContractAddressString chosenAsset.contractAddress)
                         |> Maybe.map .collateralFactor
                         |> Maybe.withDefault Decimal.zero
 
                 inputWithCollateralFactor =
-                    if Balances.hasEnteredAsset config mainModel.compoundState chosenAsset then
+                    if Balances.hasEnteredAsset config mainModel.groveState chosenAsset then
                         inputValueAsUsd
                             |> Decimal.mul collateralFactor
 
@@ -1645,12 +1613,12 @@ borrowLimitUsedWithAdjustedInputView config ({ chosenAsset, primaryActionType, i
 
 
 currentBorrowBalanceUsd : Model -> Decimal
-currentBorrowBalanceUsd { compoundState, oracleState, tokenState } =
+currentBorrowBalanceUsd { groveState, oracleState, tokenState } =
     let
         cTokens =
             Dict.values tokenState.cTokens
 
         balanceTotalsUsd =
-            Balances.getUnderlyingTotalsInUsd compoundState cTokens oracleState
+            Balances.getUnderlyingTotalsInUsd groveState cTokens oracleState
     in
     balanceTotalsUsd.totalBorrow

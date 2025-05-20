@@ -6,9 +6,9 @@ port module Preferences exposing
     , preferencesUpdate
     )
 
-import CompoundComponents.DisplayCurrency as DisplayCurrency exposing (DisplayCurrency(..))
-import CompoundComponents.Eth.Decoders exposing (forceMaybe)
-import CompoundComponents.Functions exposing (handleError)
+import GroveComponents.DisplayCurrency as DisplayCurrency exposing (DisplayCurrency(..))
+import GroveComponents.Eth.Decoders exposing (forceMaybe)
+import GroveComponents.Functions exposing (handleError)
 import Dict
 import Json.Decode exposing (Value)
 import Json.Decode.Pipeline exposing (optional, required)

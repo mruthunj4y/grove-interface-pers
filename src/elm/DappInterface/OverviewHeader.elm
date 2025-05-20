@@ -3,11 +3,11 @@ module DappInterface.OverviewHeader exposing (Msg(..), ParentMsg(..), view)
 import Balances
 import Bootstrap.Progress as Progress
 import Charty.PieChart as PieChart
-import CompoundComponents.DisplayCurrency as DisplayCurrency
-import CompoundComponents.Eth.Ethereum exposing (getContractAddressString)
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (HrefLinkType(..), class, href, id, onClickStopPropagation, style)
-import CompoundComponents.Utils.DigitAnimatorHelper exposing (valueFormattedStringToDigits)
-import CompoundComponents.Utils.NumberFormatter exposing (formatPercentageToNearestWhole, formatPercentageWithDots)
+import GroveComponents.DisplayCurrency as DisplayCurrency
+import GroveComponents.Eth.Ethereum exposing (getContractAddressString)
+import GroveComponents.Utils.GroveHtmlAttributes exposing (HrefLinkType(..), class, href, id, onClickStopPropagation, style)
+import GroveComponents.Utils.DigitAnimatorHelper exposing (valueFormattedStringToDigits)
+import GroveComponents.Utils.NumberFormatter exposing (formatPercentageToNearestWhole, formatPercentageWithDots)
 import DappInterface.CollateralPane as CollateralPane
 import DappInterface.MainModel
     exposing
@@ -49,10 +49,10 @@ view maybeConfig maybeEtherUsdPrice ({ borrowingContainerState, preferences } as
             Dict.values mainModel.tokenState.cTokens
 
         balanceTotalsUsd =
-            Balances.getUnderlyingTotalsInUsd mainModel.compoundState cTokens mainModel.oracleState
+            Balances.getUnderlyingTotalsInUsd mainModel.groveState cTokens mainModel.oracleState
 
         accountLiquidityUsd =
-            mainModel.compoundState.maybeAccountLiquidityUsd
+            mainModel.groveState.maybeAccountLiquidityUsd
                 |> Maybe.withDefault Decimal.zero
 
         --Total Borrow Limit is AccountLiquidity + TotalBorrowBalance
@@ -135,7 +135,7 @@ view maybeConfig maybeEtherUsdPrice ({ borrowingContainerState, preferences } as
                 |> List.filter (\ctoken -> ctoken.underlying.symbol == "USDC")
                 |> List.head
                 |> Maybe.andThen
-                    (\cUSDC -> Balances.getUnderlyingBalances mainModel.compoundState cUSDC.contractAddress)
+                    (\cUSDC -> Balances.getUnderlyingBalances mainModel.groveState cUSDC.contractAddress)
                 |> Maybe.andThen
                     (\balances ->
                         let
@@ -145,7 +145,7 @@ view maybeConfig maybeEtherUsdPrice ({ borrowingContainerState, preferences } as
                                         [ div [ class "migrator-alert__badge" ] [ text "NEW" ]
                                         , label [ class "migrator-alert__title" ] [ text "Migrate your V2 balances!" ]
                                         , label [ class "migrator-alert__description" ]
-                                            [ text "Transfer multiple balances to Compound V3 in a single transaction using our new "
+                                            [ text "Transfer multiple balances to Grove V3 in a single transaction using our new "
                                             , a (href External "https://app.compound.finance/extensions/comet_migrator") [ text "migrator tool" ]
                                             , text "."
                                             ]
@@ -237,7 +237,7 @@ netAPYView maybeConfig _ ({ userLanguage } as mainModel) =
             Dict.values mainModel.tokenState.cTokens
 
         balanceTotalsUsd =
-            Balances.getUnderlyingTotalsInUsd mainModel.compoundState cTokens mainModel.oracleState
+            Balances.getUnderlyingTotalsInUsd mainModel.groveState cTokens mainModel.oracleState
 
         ( balanceWithRatesSum, supplyWithRatesSum, borrowWithRatesSum ) =
             cTokens
@@ -245,7 +245,7 @@ netAPYView maybeConfig _ ({ userLanguage } as mainModel) =
                     (\cToken ->
                         let
                             ( supplyBalance, borrowBalance ) =
-                                Balances.getUnderlyingBalances mainModel.compoundState cToken.contractAddress
+                                Balances.getUnderlyingBalances mainModel.groveState cToken.contractAddress
                                     |> Maybe.map
                                         (\balances ->
                                             ( balances.underlyingSupplyBalance
@@ -269,7 +269,7 @@ netAPYView maybeConfig _ ({ userLanguage } as mainModel) =
                                 getContractAddressString cToken.contractAddress
 
                             maybeCTokenMetadata =
-                                mainModel.compoundState.cTokensMetadata
+                                mainModel.groveState.cTokensMetadata
                                     |> Dict.get cTokenAddressString
 
                             ( compRateForSupply, compRateForBorrow ) =
@@ -294,7 +294,7 @@ netAPYView maybeConfig _ ({ userLanguage } as mainModel) =
                                         ( Decimal.zero, Decimal.zero )
 
                             ( supplyInterestRate, borrowInterestRate ) =
-                                Balances.getInterestRate mainModel.compoundState.cTokensMetadata cToken.contractAddress
+                                Balances.getInterestRate mainModel.groveState.cTokensMetadata cToken.contractAddress
                                     |> Maybe.map
                                         (\rates ->
                                             ( rates.supplyRate

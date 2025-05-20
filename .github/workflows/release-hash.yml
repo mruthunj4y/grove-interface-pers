@@ -40,7 +40,7 @@ jobs:
         uses: hayesgm/seacrest@b87fb76eca4d03573060a86f4850395f40442087
         with:
           wallet_connect_project_id: ${{secrets.WALLET_CONNECT_PROJECT_ID}}
-          requested_network: mainnet
+          requested_network: Xrplevm
         if: github.event.inputs.signature == ''
 
       - name: Push IPFS Release

@@ -1,9 +1,8 @@
-port module Admin exposing
+module Admin exposing
     ( InternalMsg
     , Model
     , Translator
     , emptyState
-    , getQueuedTransactions
     , init
     , subscriptions
     , translator
@@ -12,17 +11,17 @@ port module Admin exposing
     )
 
 import Array exposing (Array)
-import CompoundComponents.Console as Console
-import CompoundComponents.Eth.Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), getContractAddressString, isValidAddress)
-import CompoundComponents.Eth.Network exposing (Network(..), networkName)
-import CompoundComponents.Functions exposing (handleError)
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (HrefLinkType(..), class, id, onClickStopPropagation, placeholder, type_, value)
-import CompoundComponents.Utils.Markup exposing (disabled)
-import CompoundComponents.Utils.Time
+import GroveComponents.Console as Console
+import GroveComponents.Eth.Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), getContractAddressString, isValidAddress)
+import GroveComponents.Eth.Network exposing (Network(..), networkName)
+import GroveComponents.Functions exposing (handleError)
+import GroveComponents.Utils.GroveHtmlAttributes exposing (HrefLinkType(..), class, id, onClickStopPropagation, placeholder, type_, value)
+import GroveComponents.Utils.Markup exposing (disabled)
+import GroveComponents.Utils.Time
 import Decimal
 import Dict exposing (Dict)
 import Eth.Config exposing (Config)
-import Eth.Transaction exposing (transactionDateFormatter)
+import Eth.Contract exposing (ContractInfo, contractList)
 import Html exposing (Html, button, div, h2, input, label, p, section, text)
 import Html.Events exposing (onClick, onInput)
 import Json.Decode exposing (field, list)
@@ -32,7 +31,7 @@ import Regex exposing (contains)
 import Strings.Translations as Translations
 import Time
 import Utils.ABIHelper exposing (ABIValue)
-import Utils.GovernanceHelper exposing (TimelockTransaction, abiDecoder, timelockTrxDecoder)
+import Utils.GovernanceHelper exposing (abiDecoder)
 
 
 type alias Model =
@@ -43,12 +42,8 @@ type alias Model =
     , functionArgs : Array (Maybe String)
     , argsValid : Array Bool
     , contractsDropdownActive : Bool
-    , delayDropdownActive : Bool
     , functionsDropdownActive : Bool
-    , delayOptions : List Int
-    , delay : Int
     , value : String
-    , queuedTransactions : List TimelockTransaction
     , errors : List String
     }
 
@@ -58,14 +53,9 @@ type InternalMsg
     | SetFunction ABIValue
     | SetArg Int String String
     | SetValue String
-    | SetDelay Int
-    | AskQueueTransaction CustomerAddress String String String String
-    | AskExecuteTransaction CustomerAddress String String String String String String
     | ToggleContractDropdown Bool
-    | ToggleDelayDropdown Bool
     | ToggleFunctionDropdown Bool
     | EncodeParametersResult String
-    | QueueTransactionsResult (List TimelockTransaction)
     | Error String
 
 
@@ -102,12 +92,8 @@ emptyState =
     , functionArgs = Array.empty
     , argsValid = Array.empty
     , contractsDropdownActive = False
-    , delayDropdownActive = False
     , functionsDropdownActive = False
     , value = "0"
-    , delayOptions = List.range 2 30
-    , delay = 0
-    , queuedTransactions = []
     , errors = []
     }
 
@@ -126,13 +112,6 @@ update internalMsg model =
     case internalMsg of
         EncodeParametersResult dataString ->
             ( { model | maybeDataArg = Just dataString }, Cmd.none )
-
-        QueueTransactionsResult adminTransactions ->
-            let
-                newQueuedTransactions =
-                    List.append model.queuedTransactions adminTransactions
-            in
-            ( { model | queuedTransactions = newQueuedTransactions }, Cmd.none )
 
         SetTarget tuple ->
             ( { model
@@ -235,40 +214,21 @@ update internalMsg model =
         SetValue value ->
             ( { model | value = value }, Cmd.none )
 
-        SetDelay delay ->
-            ( { model | delay = delay }, Cmd.none )
-
-        AskQueueTransaction adminAddress timelockAddress target signature data ->
-            let
-                delayInSeconds =
-                    String.fromInt model.delay
-            in
-            ( model, queueTransaction adminAddress timelockAddress target model.value signature data delayInSeconds )
-
-        AskExecuteTransaction adminAddress timelockAddress target value signature data eta ->
-            ( model, executeTransaction adminAddress timelockAddress target value signature data eta )
-
         ToggleContractDropdown isActive ->
-            ( { model | contractsDropdownActive = isActive, delayDropdownActive = False, functionsDropdownActive = False }, Cmd.none )
-
-        ToggleDelayDropdown isActive ->
-            ( { model | contractsDropdownActive = False, delayDropdownActive = isActive, functionsDropdownActive = False }, Cmd.none )
+            ( { model | contractsDropdownActive = isActive, functionsDropdownActive = False }, Cmd.none )
 
         ToggleFunctionDropdown isActive ->
-            ( { model | contractsDropdownActive = False, delayDropdownActive = False, functionsDropdownActive = isActive }, Cmd.none )
+            ( { model | contractsDropdownActive = False, functionsDropdownActive = isActive }, Cmd.none )
 
         Error error ->
             ( { model | errors = error :: model.errors }, Console.error error )
 
 
-view : Translations.Lang -> Dict String Config -> Json.Encode.Value -> Account -> Maybe Network -> Time.Zone -> Maybe Time.Posix -> Model -> Html Msg
-view userLanguage configs abiFilesRaw account maybeNetwork currentTimeZone maybeCurrentTime model =
+view : Translations.Lang -> Dict String Config -> Json.Encode.Value -> Account -> Maybe Network -> Model -> Html Msg
+view userLanguage configs abiFilesRaw account maybeNetwork model =
     let
         nameOfNetwork =
             case maybeNetwork of
-                Just MainNet ->
-                    String.toLower (networkName MainNet)
-
                 Just network ->
                     String.toLower (networkName network)
 
@@ -281,26 +241,21 @@ view userLanguage configs abiFilesRaw account maybeNetwork currentTimeZone maybe
         adminView =
             case maybeNetworkConfig of
                 Just config ->
-                    case config.maybeTimelock of
-                        Just _ ->
-                            timelockView configs abiFilesRaw account maybeNetwork currentTimeZone maybeCurrentTime model
-
-                        Nothing ->
-                            noGovernanceView
+                    adminDashboardView configs abiFilesRaw account maybeNetwork model
 
                 Nothing ->
-                    noGovernanceView
+                    noAdminView
     in
     div [ id "Admin" ] [ adminView ]
 
 
-noGovernanceView : Html Msg
-noGovernanceView =
-    div [ class "container" ] [ text "The current selected network doesn't have governance" ]
+noAdminView : Html Msg
+noAdminView =
+    div [ class "container" ] [ text "The current selected network doesn't have admin functionality" ]
 
 
-timelockView : Dict String Config -> Json.Encode.Value -> Account -> Maybe Network -> Time.Zone -> Maybe Time.Posix -> Model -> Html Msg
-timelockView configs abiFilesRaw account maybeNetwork timezone maybeCurrentTime model =
+adminDashboardView : Dict String Config -> Json.Encode.Value -> Account -> Maybe Network -> Model -> Html Msg
+adminDashboardView configs abiFilesRaw account maybeNetwork model =
     let
         dropdownActiveClass dropdown =
             if dropdown model then
@@ -309,16 +264,13 @@ timelockView configs abiFilesRaw account maybeNetwork timezone maybeCurrentTime 
             else
                 ""
 
-        ( nameOfNetwork, delayType, delayUnit ) =
+        nameOfNetwork =
             case maybeNetwork of
-                Just MainNet ->
-                    ( String.toLower (networkName MainNet), CompoundComponents.Utils.Time.days, " days" )
-
                 Just network ->
-                    ( String.toLower (networkName network), CompoundComponents.Utils.Time.minutes, " minutes" )
+                    String.toLower (networkName network)
 
                 Nothing ->
-                    ( "", 1, "" )
+                    ""
 
         maybeNetworkConfig =
             Dict.get nameOfNetwork configs
@@ -327,34 +279,6 @@ timelockView configs abiFilesRaw account maybeNetwork timezone maybeCurrentTime 
         contracts =
             case maybeNetworkConfig of
                 Just config ->
-                    let
-                        timelock : List ( String, String )
-                        timelock =
-                            case config.maybeTimelock of
-                                Just timelockEntry ->
-                                    [ ( "Timelock", getContractAddressString timelockEntry ) ]
-
-                                Nothing ->
-                                    []
-
-                        cErc20Delegate : List ( String, String )
-                        cErc20Delegate =
-                            case config.maybeCErc20Delegate of
-                                Just cErc20DelegateEntry ->
-                                    [ ( "CErc20Delegate", getContractAddressString cErc20DelegateEntry ) ]
-
-                                Nothing ->
-                                    []
-
-                        cDaiDelegate : List ( String, String )
-                        cDaiDelegate =
-                            case config.maybeCDaiDelegate of
-                                Just cDaiDelegateEntry ->
-                                    [ ( "CDaiDelegate", getContractAddressString cDaiDelegateEntry ) ]
-
-                                Nothing ->
-                                    []
-                    in
                     [ ( "Comptroller", getContractAddressString config.comptroller )
                     , ( "PriceOracle", getContractAddressString config.priceOracle )
                     , ( "cETH", getContractAddressString config.cEtherToken.address )
@@ -374,9 +298,6 @@ timelockView configs abiFilesRaw account maybeNetwork timezone maybeCurrentTime 
                                     )
                                 |> List.concat
                            )
-                        ++ timelock
-                        ++ cErc20Delegate
-                        ++ cDaiDelegate
 
                 Nothing ->
                     []
@@ -462,38 +383,11 @@ timelockView configs abiFilesRaw account maybeNetwork timezone maybeCurrentTime 
 
                 Nothing ->
                     text ""
-
-        delayString =
-            String.fromInt (model.delay // delayType)
-
-        actionButton =
-            case ( account, maybeNetworkConfig ) of
-                ( Acct adminAddress _, Just config ) ->
-                    case config.maybeTimelock of
-                        Just timelock ->
-                            case ( model.maybeTarget, model.maybeFunction, model.maybeDataArg ) of
-                                ( Just _, Just _, Just data ) ->
-                                    button
-                                        [ class "button main", onClick <| ForSelf (AskQueueTransaction adminAddress (getContractAddressString timelock) targetAddress functionSignature data) ]
-                                        [ text "Enqueue Transaction" ]
-
-                                _ ->
-                                    button
-                                        [ disabled, class "button main" ]
-                                        [ text "Enqueue Transaction" ]
-
-                        _ ->
-                            text ""
-
-                _ ->
-                    button
-                        [ disabled, class "button main" ]
-                        [ text "Enqueue Transaction" ]
     in
     div []
         [ section []
             [ div [ class "container" ]
-                [ h2 [] [ text "Testnet Admin Dashboard" ]
+                [ h2 [] [ text "Admin Dashboard" ]
                 ]
             ]
         , section []
@@ -567,112 +461,6 @@ timelockView configs abiFilesRaw account maybeNetwork timezone maybeCurrentTime 
                 , input [ type_ "text", placeholder "value", onInput (ForSelf << SetValue), value model.value ] []
                 ]
             ]
-        , section []
-            [ div [ class "container" ]
-                [ label [ class "medium" ] [ text "Select When To Execute" ]
-                , div [ class "dropdown dropdown--big", onClickStopPropagation (ForSelf (ToggleDelayDropdown (not model.delayDropdownActive))) ]
-                    [ div [ class "dropdown__selected dropdown__selected--light" ]
-                        [ p [ class "small" ] [ text (delayString ++ delayUnit) ]
-                        ]
-                    , div [ class ("dropdown__options dropdown__options--light" ++ dropdownActiveClass .delayDropdownActive) ]
-                        (model.delayOptions
-                            |> List.map
-                                (\delay ->
-                                    let
-                                        delay_ =
-                                            String.fromInt delay
-
-                                        delayToSet =
-                                            delay * delayType
-                                    in
-                                    div [ class "dropdown__option dropdown__option--light", onClick (ForSelf (SetDelay delayToSet)) ]
-                                        [ p [ class "small" ] [ text (delay_ ++ delayUnit) ] ]
-                                )
-                        )
-                    ]
-                ]
-            ]
-        , section []
-            [ div [ class "container" ]
-                [ actionButton ]
-            ]
-        , section []
-            [ div [ class "container" ]
-                (model.queuedTransactions
-                    |> List.map
-                        (\queuedTx ->
-                            let
-                                maybeContractInfo =
-                                    contracts
-                                        |> List.filter
-                                            (\( _, addressString ) ->
-                                                String.toLower addressString == String.toLower queuedTx.target
-                                            )
-                                        |> List.head
-
-                                contractCall =
-                                    case maybeContractInfo of
-                                        Just ( name, _ ) ->
-                                            name ++ "." ++ queuedTx.transactionData.functionCall
-
-                                        Nothing ->
-                                            queuedTx.target ++ "." ++ queuedTx.transactionData.functionCall
-
-                                dateString =
-                                    case String.toInt queuedTx.eta of
-                                        Just eta ->
-                                            let
-                                                etaInTimePosix =
-                                                    Time.millisToPosix (eta * 1000)
-
-                                                formattedDate =
-                                                    transactionDateFormatter timezone etaInTimePosix
-                                            in
-                                            queuedTx.eta ++ " (" ++ formattedDate ++ ")"
-
-                                        Nothing ->
-                                            queuedTx.eta
-
-                                actionButtonExecute =
-                                    case ( maybeCurrentTime, String.toInt queuedTx.eta ) of
-                                        ( Just time, Just eta ) ->
-                                            if CompoundComponents.Utils.Time.posixToSeconds time > eta then
-                                                case ( account, maybeNetworkConfig ) of
-                                                    ( Acct adminAddress _, Just config ) ->
-                                                        case config.maybeTimelock of
-                                                            Just timelock ->
-                                                                button
-                                                                    [ class "button main", onClick <| ForSelf (AskExecuteTransaction adminAddress (getContractAddressString timelock) queuedTx.target queuedTx.value queuedTx.signature queuedTx.data queuedTx.eta) ]
-                                                                    [ text "Execute Transaction" ]
-
-                                                            _ ->
-                                                                text ""
-
-                                                    _ ->
-                                                        button
-                                                            [ disabled, class "button main" ]
-                                                            [ text "Execute Transaction" ]
-
-                                            else
-                                                button
-                                                    [ disabled, class "button main" ]
-                                                    [ text "Delay Not Met" ]
-
-                                        _ ->
-                                            text ""
-                            in
-                            div []
-                                [ label [] [ text contractCall ]
-                                , p [ class "small" ] [ text ("target: " ++ String.toLower queuedTx.target) ]
-                                , p [ class "small" ] [ text ("value: " ++ queuedTx.value) ]
-                                , p [ class "small" ] [ text ("signature: " ++ queuedTx.signature) ]
-                                , p [ class "small" ] [ text ("data: " ++ queuedTx.data) ]
-                                , p [ class "small" ] [ text ("eta: " ++ dateString) ]
-                                , actionButtonExecute
-                                ]
-                        )
-                )
-            ]
         ]
 
 
@@ -684,84 +472,4 @@ subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
         [ giveEncodedParameters (handleError (ForSelf << Error << Json.Decode.errorToString) (ForSelf << EncodeParametersResult))
-        , giveQueuedTransactions (handleError (ForSelf << Error << Json.Decode.errorToString) (ForSelf << QueueTransactionsResult))
         ]
-
-
-port adminDashboardGetQueuedTransactionsPort : { timelockAddress : String, initialBlockNumber : Int } -> Cmd msg
-
-
-getQueuedTransactions : Dict String Config -> Maybe Network -> Cmd msg
-getQueuedTransactions configs maybeNetwork =
-    let
-        nameOfNetwork =
-            case maybeNetwork of
-                Just network ->
-                    String.toLower (networkName network)
-
-                Nothing ->
-                    ""
-
-        getTrxsCmd =
-            case Dict.get nameOfNetwork configs of
-                Just config ->
-                    case ( config.maybeTimelock, Dict.get "Timelock" config.blocks ) of
-                        ( Just timelock, Just blockNumber ) ->
-                            adminDashboardGetQueuedTransactionsPort
-                                { timelockAddress = getContractAddressString timelock
-                                , initialBlockNumber = blockNumber
-                                }
-
-                        _ ->
-                            Cmd.none
-
-                Nothing ->
-                    Cmd.none
-    in
-    getTrxsCmd
-
-
-port adminDashboardQueueTransactionPort : { adminAddress : String, timelockAddress : String, target : String, value : String, signature : String, data : String, delay : String } -> Cmd msg
-
-
-queueTransaction : CustomerAddress -> String -> String -> String -> String -> String -> String -> Cmd msg
-queueTransaction (Customer adminAddress) timelockAddress target value signature data delay =
-    adminDashboardQueueTransactionPort
-        { adminAddress = adminAddress
-        , timelockAddress = timelockAddress
-        , target = target
-        , value = value
-        , signature = signature
-        , data = data
-        , delay = delay
-        }
-
-
-port adminDashboardExecuteTransactionPort : { adminAddress : String, timelockAddress : String, target : String, value : String, signature : String, data : String, eta : String } -> Cmd msg
-
-
-executeTransaction : CustomerAddress -> String -> String -> String -> String -> String -> String -> Cmd msg
-executeTransaction (Customer adminAddress) timelockAddress target value signature data eta =
-    adminDashboardExecuteTransactionPort
-        { adminAddress = adminAddress
-        , timelockAddress = timelockAddress
-        , target = target
-        , value = value
-        , signature = signature
-        , data = data
-        , eta = eta
-        }
-
-
-port giveQueuedTransactionsPort : (Json.Decode.Value -> msg) -> Sub msg
-
-
-giveQueuedTransactions : (Result Json.Decode.Error (List TimelockTransaction) -> msg) -> Sub msg
-giveQueuedTransactions wrapper =
-    let
-        decoder =
-            list
-                timelockTrxDecoder
-    in
-    giveQueuedTransactionsPort
-        (Json.Decode.decodeValue decoder >> wrapper)

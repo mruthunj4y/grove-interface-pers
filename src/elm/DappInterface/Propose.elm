@@ -12,12 +12,12 @@ port module DappInterface.Propose exposing
     )
 
 import Array exposing (Array)
-import CompoundComponents.Console as Console
-import CompoundComponents.Eth.Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), getContractAddressString, isValidAddress)
-import CompoundComponents.Eth.Network exposing (Network(..), networkName)
-import CompoundComponents.Functions exposing (handleError)
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (HrefLinkType(..), class, id, onClickStopPropagation, placeholder, style, type_, value)
-import CompoundComponents.Utils.Markup exposing (disabled)
+import GroveComponents.Console as Console
+import GroveComponents.Eth.Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), getContractAddressString, isValidAddress)
+import GroveComponents.Eth.Network exposing (Network(..), networkName)
+import GroveComponents.Functions exposing (handleError)
+import GroveComponents.Utils.GroveHtmlAttributes exposing (HrefLinkType(..), class, id, onClickStopPropagation, placeholder, style, type_, value)
+import GroveComponents.Utils.Markup exposing (disabled)
 import Dict exposing (Dict)
 import Eth.Config exposing (Config)
 import Eth.Contract exposing (ContractInfo, contractList)
@@ -30,7 +30,7 @@ import Port exposing (encodeParameters, giveEncodedParameters)
 import Strings.Translations as Translations
 import Utils.ABIHelper exposing (ABIValue)
 import Utils.ArrayHelper exposing (updateArray)
-import Utils.GovernanceHelper exposing (abiDecoder, governanceHelperDataFromConfig, humanReadableTimelockAction)
+import Utils.GovernanceHelper exposing (abiDecoder, governanceHelperDataFromConfig)
 
 
 type alias Model =
@@ -39,7 +39,6 @@ type alias Model =
     , maybeDataArg : Maybe String
     , functionArgs : Array FunctionArg
     , contractsDropdownActive : Bool
-    , delayDropdownActive : Bool
     , functionsDropdownActive : Bool
     , value : String
     , actions : List Action
@@ -75,7 +74,7 @@ type InternalMsg
     | ToggleFunctionDropdown Bool
     | EncodeParametersResult String
     | AskSubmitProposal CustomerAddress ( ContractAddress, Bool )
-    | AskSubmitCrowdProposal CustomerAddress ContractAddress ContractAddress ContractAddress
+    | AskSubmitCrowdProposal CustomerAddress ContractAddress ContractAddress
     | AddAction ( String, String ) ABIValue String
     | SetActionModal Bool (Maybe Int)
     | SetActionModalStep Int
@@ -118,7 +117,6 @@ emptyState =
     , maybeDataArg = Nothing
     , functionArgs = Array.empty
     , contractsDropdownActive = False
-    , delayDropdownActive = False
     , functionsDropdownActive = False
     , value = "0"
     , actions = []
@@ -227,7 +225,6 @@ update userLanguage internalMsg model =
             ( { newModel
                 | actionModalActive = active
                 , contractsDropdownActive = False
-                , delayDropdownActive = False
                 , functionsDropdownActive = False
                 , actionModalStep = 0
               }
@@ -340,18 +337,18 @@ update userLanguage internalMsg model =
             in
             ( model, submitProposal adminAddress governorAddress isBravo targets values signatures calldatas description )
 
-        AskSubmitCrowdProposal adminAddress crowdFactoryAddress compAddress governorAddress ->
+        AskSubmitCrowdProposal adminAddress crowdFactoryAddress compAddress ->
             let
                 { targets, values, signatures, calldatas, description } =
                     getProposalDetails model
             in
-            ( model, submitCrowdProposal adminAddress crowdFactoryAddress targets values signatures calldatas description compAddress governorAddress )
+            ( model, submitCrowdProposal adminAddress crowdFactoryAddress targets values signatures calldatas description compAddress )
 
         ToggleContractDropdown isActive ->
-            ( { model | contractsDropdownActive = isActive, delayDropdownActive = False, functionsDropdownActive = False }, Cmd.none )
+            ( { model | contractsDropdownActive = isActive, functionsDropdownActive = False }, Cmd.none )
 
         ToggleFunctionDropdown isActive ->
-            ( { model | contractsDropdownActive = False, delayDropdownActive = False, functionsDropdownActive = isActive }, Cmd.none )
+            ( { model | contractsDropdownActive = False, functionsDropdownActive = isActive }, Cmd.none )
 
         Error error ->
             ( { model | errors = error :: model.errors }, Console.error error )
@@ -374,11 +371,11 @@ view userLanguage isCrowdProposal configs abiFilesRaw account maybeNetwork model
         adminView =
             case maybeNetworkConfig of
                 Just config ->
-                    case ( config.maybeGovernor, config.maybeCompToken ) of
-                        ( Just governor, Just compToken ) ->
-                            governanceView userLanguage isCrowdProposal config governor compToken.address abiFilesRaw account nameOfNetwork config.maybeCrowdProposalFactory model
+                    case config.maybeCompToken of
+                        Just compToken ->
+                            governanceView userLanguage isCrowdProposal config compToken.address abiFilesRaw account nameOfNetwork model
 
-                        _ ->
+                        Nothing ->
                             noGovernanceView userLanguage
 
                 Nothing ->
@@ -392,16 +389,15 @@ noGovernanceView userLanguage =
     div [ class "container" ] [ text (Translations.no_governance_description userLanguage) ]
 
 
-governanceView : Translations.Lang -> Bool -> Config -> ( ContractAddress, Bool ) -> ContractAddress -> Json.Encode.Value -> Account -> String -> Maybe ContractAddress -> Model -> Html Msg
-governanceView userLanguage isCrowdProposal config ( governorAddress, isBravo ) compAddress abiFilesRaw account nameOfNetwork maybeCrowdFactoryAddress model =
+governanceView : Translations.Lang -> Bool -> Config -> ContractAddress -> Json.Encode.Value -> Account -> String -> Model -> Html Msg
+governanceView userLanguage isCrowdProposal config compAddress abiFilesRaw account nameOfNetwork model =
     let
         goverananceHelperData =
             governanceHelperDataFromConfig (Just config)
 
         ( proposalTypeText, defaultSubmitButtonText ) =
-            if isCrowdProposal && maybeCrowdFactoryAddress /= Nothing then
+            if isCrowdProposal then
                 ( Translations.create_autonomous_proposal userLanguage, Translations.submit_autonomous_proposal userLanguage )
-
             else
                 ( Translations.create_proposal userLanguage, Translations.submit_proposal userLanguage )
 
@@ -429,15 +425,15 @@ governanceView userLanguage isCrowdProposal config ( governorAddress, isBravo ) 
                 Acct adminAddress _ ->
                     case ( model.maybeProposalTitle, List.length model.actions > 0 ) of
                         ( Just _, True ) ->
-                            case ( isCrowdProposal, maybeCrowdFactoryAddress ) of
-                                ( True, Just crowdFactoryAddress ) ->
+                            case isCrowdProposal of
+                                True ->
                                     button
-                                        [ class "button main", onClick (ForSelf (AskSubmitCrowdProposal adminAddress crowdFactoryAddress compAddress governorAddress)) ]
+                                        [ class "button main", onClick (ForSelf (AskSubmitCrowdProposal adminAddress compAddress compAddress)) ]
                                         [ text (Translations.submit_autonomous_proposal userLanguage) ]
 
                                 _ ->
                                     button
-                                        [ class "button main", onClick (ForSelf (AskSubmitProposal adminAddress ( governorAddress, isBravo ))) ]
+                                        [ class "button main", onClick (ForSelf (AskSubmitProposal adminAddress ( compAddress, False ))) ]
                                         [ text (Translations.submit_proposal userLanguage) ]
 
                         _ ->
@@ -493,16 +489,14 @@ governanceView userLanguage isCrowdProposal config ( governorAddress, isBravo ) 
                                                         Array.toList action.functionArgs
                                                             |> List.map .text
 
-                                                    -- TODO: .text?
-                                                    ( isHumanReadable, headerText, subHeaderText ) =
-                                                        humanReadableTimelockAction userLanguage goverananceHelperData target action.value functionName functionArgsText
-
                                                     actionText =
-                                                        if isHumanReadable then
-                                                            headerText
-
-                                                        else
-                                                            subHeaderText
+                                                        let
+                                                            targetName = 
+                                                                case Dict.get (String.toLower target) goverananceHelperData.contractAddressToName of
+                                                                    Just name -> name
+                                                                    Nothing -> target
+                                                        in
+                                                        targetName ++ "." ++ functionName ++ "(" ++ String.join ", " functionArgsText ++ ")"
                                                 in
                                                 div [ class "actions-section__action", onClick <| ForSelf (SetActionModal True (Just index)) ]
                                                     [ text actionText
@@ -946,11 +940,11 @@ submitProposal (Customer adminAddress) (Contract governorAddress) isBravo target
         }
 
 
-port adminDashboardSubmitCrowdProposalPort : { adminAddress : String, crowdFactoryAddress : String, targets : List String, values : List String, signatures : List String, calldatas : List String, description : String, compAddress : String, governorAddress : String } -> Cmd msg
+port adminDashboardSubmitCrowdProposalPort : { adminAddress : String, crowdFactoryAddress : String, targets : List String, values : List String, signatures : List String, calldatas : List String, description : String, compAddress : String } -> Cmd msg
 
 
-submitCrowdProposal : CustomerAddress -> ContractAddress -> List String -> List String -> List String -> List String -> String -> ContractAddress -> ContractAddress -> Cmd msg
-submitCrowdProposal (Customer adminAddress) (Contract crowdFactoryAddress) targets values signatures calldatas description (Contract compAddress) (Contract governorAddress) =
+submitCrowdProposal : CustomerAddress -> ContractAddress -> List String -> List String -> List String -> List String -> String -> ContractAddress -> Cmd msg
+submitCrowdProposal (Customer adminAddress) (Contract crowdFactoryAddress) targets values signatures calldatas description (Contract compAddress) =
     adminDashboardSubmitCrowdProposalPort
         { adminAddress = adminAddress
         , crowdFactoryAddress = crowdFactoryAddress
@@ -960,5 +954,4 @@ submitCrowdProposal (Customer adminAddress) (Contract crowdFactoryAddress) targe
         , calldatas = calldatas
         , description = description
         , compAddress = compAddress
-        , governorAddress = governorAddress
         }

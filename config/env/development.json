@@ -1,22 +1,12 @@
 {
   "API_BASE_URL_MAP": {
-    "v3_api": "https://v3-api-stage.compound.finance/"
+    "v3_api": "http://localhost:8545/"
   },
   "DATA_PROVIDERS": {
-    "development": "http://localhost:8545",
-    "goerli": "https://infura.io/goerli",
-    "rinkeby": "https://infura.io/rinkeby",
-    "kovan": "https://infura.io/kovan",
-    "ropsten": "https://infura.io/ropsten",
-    "mainnet": "https://infura.io/mainnet"
+    "Xrplevm": "https://rpc.testnet.xrplevm.org/"
   },
   "NETWORK_MAP": {
-    "mainnet": 1,
-    "ropsten": 3,
-    "rinkeby": 4,
-    "goerli": 5,
-    "kovan": 42,
-    "development": 999
+    "Xrplevm":1449000
   },
-  "DEFAULT_NETWORK": "mainnet"
+  "DEFAULT_NETWORK": "Xrplevm"
 }

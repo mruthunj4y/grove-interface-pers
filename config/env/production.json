@@ -8,14 +8,14 @@
     "rinkeby": "https://infura.io/rinkeby",
     "kovan": "https://infura.io/kovan",
     "ropsten": "https://infura.io/ropsten",
-    "mainnet": "https://infura.io/mainnet"
+    "Mainnet": "https://infura.io/Mainnet"
   },
   "NETWORK_MAP": {
-    "mainnet": 1,
+    "Mainnet": 1,
     "ropsten": 3,
     "rinkeby": 4,
     "goerli": 5,
     "kovan": 42
   },
-  "DEFAULT_NETWORK": "mainnet"
+  "DEFAULT_NETWORK": "Mainnet"
 }

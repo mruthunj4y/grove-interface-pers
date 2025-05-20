@@ -1,6 +1,6 @@
 module Source.CoinMarketCap exposing (ethereumApiUrl, loadEtherPrice)
 
-import CompoundComponents.Eth.Decoders exposing (forceMaybe, forceOk)
+import GroveComponents.Eth.Decoders exposing (forceMaybe, forceOk)
 import Functions exposing (first)
 import Http
 import Json.Decode exposing (Decoder, andThen, field, list, map, string)

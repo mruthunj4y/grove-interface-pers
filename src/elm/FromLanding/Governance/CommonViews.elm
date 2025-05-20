@@ -3,11 +3,11 @@ module FromLanding.Governance.CommonViews exposing
     , proposalContentView
     )
 
-import CompoundApi.Governance.Common.Models exposing (ProposalAction)
-import CompoundApi.Governance.ProposalService.Models exposing (Proposal, ProposalStateEnum(..))
-import CompoundApi.Governance.ProposalVoteReceiptService.Models exposing (ProposalVoteReceipt)
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (HrefLinkType(..), class, href, id, onError, src, style, target)
-import CompoundComponents.Utils.Time exposing (differenceInSeconds)
+import GroveApi.Governance.Common.Models exposing (ProposalAction)
+import GroveApi.Governance.ProposalService.Models exposing (Proposal, ProposalStateEnum(..))
+import GroveApi.Governance.ProposalVoteReceiptService.Models exposing (ProposalVoteReceipt)
+import GroveComponents.Utils.GroveHtmlAttributes exposing (HrefLinkType(..), class, href, id, onError, src, style, target)
+import GroveComponents.Utils.Time exposing (differenceInSeconds)
 import DateFormat
 import Html exposing (Html, a, div, img, label, p, span, text)
 import Strings.Translations as Translations

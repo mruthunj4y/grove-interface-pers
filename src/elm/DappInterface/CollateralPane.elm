@@ -1,20 +1,21 @@
 module DappInterface.CollateralPane exposing (Msg(..), ParentMsg(..), ReadyCollateralAsset, areAllAssetsLoaded, getReadyCollateralAssets, view)
 
 import Balances
-import CompoundComponents.DisplayCurrency as DisplayCurrency
-import CompoundComponents.Eth.Ethereum as Ethereum exposing (Account(..), CustomerAddress(..))
-import CompoundComponents.Functions as Functions
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (HrefLinkType(..), class, id, onClickStopPropagation, type_)
-import CompoundComponents.Utils.Markup
-import CompoundComponents.Utils.NumberFormatter as NumberFormatter exposing (formatPercentageWithDots)
 import DappInterface.MainModel exposing (Model)
+import Debug
 import Decimal exposing (Decimal)
 import Dict
-import Eth.Compound exposing (CompoundMsg)
 import Eth.Config exposing (Config)
+import Eth.Grove exposing (GroveMsg)
 import Eth.Oracle
 import Eth.Token exposing (CToken)
 import Eth.Transaction
+import GroveComponents.DisplayCurrency as DisplayCurrency
+import GroveComponents.Eth.Ethereum as Ethereum exposing (Account(..), CustomerAddress(..), AssetAddress(..))
+import GroveComponents.Functions as Functions
+import GroveComponents.Utils.GroveHtmlAttributes exposing (HrefLinkType(..), class, id, onClickStopPropagation, type_)
+import GroveComponents.Utils.Markup
+import GroveComponents.Utils.NumberFormatter as NumberFormatter exposing (formatPercentageWithDots)
 import Html exposing (Html, a, div, h4, input, label, section, span, text)
 import Html.Attributes
 import Html.Events exposing (onClick)
@@ -29,19 +30,19 @@ type ParentMsg
 
 
 type Msg
-    = ForCompoundController CompoundMsg
+    = ForGroveController GroveMsg
     | ForPreferences PreferencesMsg
     | ForParent ParentMsg
 
 
 view : Maybe Config -> Maybe Decimal -> Model -> Html Msg
-view maybeConfig maybeEtherUsdPrice ({ compoundState, oracleState, tokenState, userLanguage } as model) =
+view maybeConfig maybeEtherUsdPrice ({ groveState, oracleState, tokenState, userLanguage } as model) =
     let
         allCTokensList =
-            CTokenHelper.getAllSupportedCTokens compoundState tokenState CTokenHelper.ForCollateral
+            CTokenHelper.getAllSupportedCTokens groveState tokenState CTokenHelper.ForCollateral
 
         balanceTotalsUsd =
-            Balances.getUnderlyingTotalsInUsd compoundState allCTokensList oracleState
+            Balances.getUnderlyingTotalsInUsd groveState allCTokensList oracleState
 
         headerTitleText =
             if Decimal.gt balanceTotalsUsd.totalSupply Decimal.zero then
@@ -110,7 +111,6 @@ collateralListOrAllMarketsPanel maybeConfig maybeEtherUsdPrice ({ account, userL
                                 |> List.map (collateralAssetRow False config ( Just customerAddress, maybeEtherBalance ) maybeEtherUsdPrice model)
                             )
                         ]
-
                 else
                     getAllMarketsPanelContent config maybeEtherUsdPrice False allReadyCollateralAssets model
 
@@ -119,7 +119,6 @@ collateralListOrAllMarketsPanel maybeConfig maybeEtherUsdPrice ({ account, userL
 
             _ ->
                 text ""
-
     else
         section [ class "asset-list" ]
             [ columnLabels
@@ -161,7 +160,7 @@ pendingTransactionsPanel { currentTime, currentTimeZone, network, account, token
 
 
 allMarketsListPanel : Maybe Config -> Maybe Decimal -> Model -> Html Msg
-allMarketsListPanel maybeConfig maybeEtherUsdPrice ({ account, compoundState, preferences, userLanguage } as model) =
+allMarketsListPanel maybeConfig maybeEtherUsdPrice ({ account, groveState, preferences, userLanguage } as model) =
     let
         allReadyCollateralAssets =
             getReadyCollateralAssets model False
@@ -169,7 +168,7 @@ allMarketsListPanel maybeConfig maybeEtherUsdPrice ({ account, compoundState, pr
                     (\readyAsset ->
                         let
                             borrowBalance =
-                                Balances.getUnderlyingBalances compoundState readyAsset.cToken.contractAddress
+                                Balances.getUnderlyingBalances groveState readyAsset.cToken.contractAddress
                                     |> Maybe.map .underlyingBorrowBalance
                                     |> Maybe.withDefault Decimal.zero
                         in
@@ -261,7 +260,7 @@ getAllMarketsPanelContent config maybeEtherUsdPrice addPanelClass allReadyCollat
 
 
 collateralAssetRow : Bool -> Config -> ( Maybe CustomerAddress, Maybe Decimal ) -> Maybe Decimal -> Model -> ReadyCollateralAsset -> Html Msg
-collateralAssetRow isAllMarketsRow config ( maybeCustomerAddress, maybeEtherBalance ) maybeEtherUsdPrice { compoundState, tokenState, preferences, userLanguage } { cToken, supplyBalance, tokenValueUsd, maybeSupplyInterestEarned, supplyInterestRate } =
+collateralAssetRow isAllMarketsRow config ( maybeCustomerAddress, maybeEtherBalance ) maybeEtherUsdPrice { groveState, tokenState, preferences, userLanguage } { cToken, supplyBalance, tokenValueUsd, maybeSupplyInterestEarned, supplyInterestRate } =
     let
         supplyBalanceUsd =
             Decimal.mul supplyBalance tokenValueUsd
@@ -270,7 +269,7 @@ collateralAssetRow isAllMarketsRow config ( maybeCustomerAddress, maybeEtherBala
             maybeCustomerAddress
                 |> Maybe.map
                     (\customerAddress ->
-                        Balances.getWalletBalanceNonSafeEther config (Acct customerAddress maybeEtherBalance) compoundState cToken
+                        Balances.getWalletBalanceNonSafeEther config (Acct customerAddress maybeEtherBalance) groveState cToken
                     )
                 |> Functions.demaybeify
                 |> Maybe.withDefault Decimal.zero
@@ -284,12 +283,12 @@ collateralAssetRow isAllMarketsRow config ( maybeCustomerAddress, maybeEtherBala
         ( onClickMsg, switchClass, inputExtraMarkup ) =
             case maybeCustomerAddress of
                 Just _ ->
-                    if Balances.hasEnteredAsset config compoundState cToken then
+                    if Balances.hasEnteredAsset config groveState cToken then
                         -- Already in asset, we should queue up exit.
                         ( UseAsCollateralToggleClicked cToken
                             |> ForParent
                         , "mdc-switch mdc-switch--checked"
-                        , [ CompoundComponents.Utils.Markup.checked ]
+                        , [ GroveComponents.Utils.Markup.checked ]
                         )
 
                     else
@@ -330,7 +329,7 @@ collateralAssetRow isAllMarketsRow config ( maybeCustomerAddress, maybeEtherBala
                     ]
 
         collateralFactor =
-            compoundState.cTokensMetadata
+            groveState.cTokensMetadata
                 |> Dict.get (Ethereum.getContractAddressString cToken.contractAddress)
                 |> Maybe.map .collateralFactor
                 |> Maybe.withDefault Decimal.zero
@@ -396,10 +395,10 @@ type alias ReadyCollateralAsset =
 
 
 getReadyCollateralAssets : Model -> Bool -> List ReadyCollateralAsset
-getReadyCollateralAssets { compoundState, oracleState, tokenState } applyNonZeroBalanceFilter =
+getReadyCollateralAssets { groveState, oracleState, tokenState } applyNonZeroBalanceFilter =
     let
         allCTokensList =
-            CTokenHelper.getAllSupportedCTokens compoundState tokenState CTokenHelper.ForCollateral
+            CTokenHelper.getAllSupportedCTokens groveState tokenState CTokenHelper.ForCollateral
 
         suppliedCTokensList =
             if applyNonZeroBalanceFilter then
@@ -408,17 +407,15 @@ getReadyCollateralAssets { compoundState, oracleState, tokenState } applyNonZero
                         (\cToken ->
                             let
                                 supplyBalance =
-                                    Balances.getUnderlyingBalances compoundState cToken.contractAddress
+                                    Balances.getUnderlyingBalances groveState cToken.contractAddress
                                         |> Maybe.map .underlyingSupplyBalance
                                         |> Maybe.withDefault Decimal.zero
                             in
                             if Decimal.gt supplyBalance Decimal.zero then
                                 Just cToken
-
                             else
                                 Nothing
                         )
-
             else
                 allCTokensList
     in
@@ -426,8 +423,11 @@ getReadyCollateralAssets { compoundState, oracleState, tokenState } applyNonZero
         |> List.filterMap
             (\cToken_ ->
                 let
+                    contractAddressStr = 
+                        Ethereum.getContractAddressString cToken_.contractAddress
+
                     underlyingBalances =
-                        Balances.getUnderlyingBalances compoundState cToken_.contractAddress
+                        Balances.getUnderlyingBalances groveState cToken_.contractAddress
 
                     maybeSupplyBalance =
                         underlyingBalances
@@ -436,16 +436,12 @@ getReadyCollateralAssets { compoundState, oracleState, tokenState } applyNonZero
                     maybeTokenValueUsd =
                         Eth.Oracle.getOraclePrice oracleState cToken_.underlying
 
-                    underlyingInterestBalances =
-                        Balances.getUnderlyingInterestBalances compoundState cToken_.contractAddress
-
-                    maybeSupplyInterestEarned_ =
-                        underlyingInterestBalances
-                            |> Maybe.map .underlyingSupplyInterestEarned
-                            |> Functions.demaybeify
+                    underlyingAssetAddress =
+                        case cToken_.underlying.assetAddress of
+                            Asset addr -> addr
 
                     maybeSupplyInterestRate =
-                        Balances.getInterestRate compoundState.cTokensMetadata cToken_.contractAddress
+                        Balances.getInterestRate groveState.cTokensMetadata cToken_.contractAddress
                             |> Maybe.map .supplyRate
                 in
                 Functions.map3
@@ -456,7 +452,7 @@ getReadyCollateralAssets { compoundState, oracleState, tokenState } applyNonZero
                         { cToken = cToken_
                         , supplyBalance = supplyBalance_
                         , tokenValueUsd = tokenValueUsd_
-                        , maybeSupplyInterestEarned = maybeSupplyInterestEarned_
+                        , maybeSupplyInterestEarned = Nothing
                         , supplyInterestRate = supplyInterestRate_
                         }
                     )
@@ -464,20 +460,28 @@ getReadyCollateralAssets { compoundState, oracleState, tokenState } applyNonZero
 
 
 getReadyCollateralAssetsForNoAccount : Model -> List ReadyCollateralAsset
-getReadyCollateralAssetsForNoAccount { compoundState, oracleState, tokenState } =
+getReadyCollateralAssetsForNoAccount { groveState, oracleState, tokenState } =
     let
+        
         allCTokensList =
-            CTokenHelper.getAllSupportedCTokens compoundState tokenState CTokenHelper.ForCollateral
+            CTokenHelper.getAllSupportedCTokens groveState tokenState CTokenHelper.ForCollateral
     in
     allCTokensList
         |> List.filterMap
             (\cToken_ ->
                 let
+                    contractAddressStr = 
+                        Ethereum.getContractAddressString cToken_.contractAddress
+
+                    underlyingAssetAddress =
+                        case cToken_.underlying.assetAddress of
+                            Asset addr -> addr
+
                     maybeTokenValueUsd =
                         Eth.Oracle.getOraclePrice oracleState cToken_.underlying
 
                     maybeSupplyInterestRate =
-                        Balances.getInterestRate compoundState.cTokensMetadata cToken_.contractAddress
+                        Balances.getInterestRate groveState.cTokensMetadata cToken_.contractAddress
                             |> Maybe.map .supplyRate
                 in
                 Functions.map2
@@ -495,17 +499,37 @@ getReadyCollateralAssetsForNoAccount { compoundState, oracleState, tokenState } 
 
 
 areAllAssetsLoaded : Model -> Bool
-areAllAssetsLoaded ({ account, compoundState, tokenState } as model) =
+areAllAssetsLoaded ({ groveState, oracleState, tokenState } as model) =
     let
         allCTokensList =
-            CTokenHelper.getAllSupportedCTokens compoundState tokenState CTokenHelper.ForCollateral
+            CTokenHelper.getAllSupportedCTokens
+                groveState
+                tokenState
+                CTokenHelper.ForCollateral
 
-        readyBorrowedAssets =
-            case account of
-                NoAccount ->
-                    getReadyCollateralAssetsForNoAccount model
+        -- Check if we have oracle prices
+        hasOraclePrices =
+            allCTokensList
+                |> List.any
+                    (\cToken ->
+                        Eth.Oracle.getOraclePrice oracleState cToken.underlying
+                            |> (/=) Nothing
+                    )
 
-                _ ->
-                    getReadyCollateralAssets model False
+        -- Check if we have metadata (interest rates)
+        hasMetadata =
+            not (Dict.isEmpty groveState.cTokensMetadata)
+
+        -- Check if we have balances
+        hasBalances =
+            allCTokensList
+                |> List.any
+                    (\cToken ->
+                        Balances.getUnderlyingBalances groveState cToken.contractAddress
+                            |> (/=) Nothing
+                    )
+
+        result =
+            hasOraclePrices && hasMetadata && hasBalances
     in
-    List.length allCTokensList == List.length readyBorrowedAssets
+    result

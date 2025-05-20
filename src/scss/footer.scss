@@ -1,4 +1,4 @@
-@import 'node_modules/compound-components/src/scss/components/dot-indicator';
+@import 'node_modules/grove-components/src/scss/components/dot-indicator';
 
 @import 'variables';
 
@@ -181,7 +181,7 @@ footer.dapp {
   border-top: 1px solid $color_grey_3;
 
   .brand {
-    background-image: url(/images/compound-logo-dark.svg);
+    background-image: url(/images/grove-logo-dark.svg);
   }
 
   label {

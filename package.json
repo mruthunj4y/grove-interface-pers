@@ -1,7 +1,7 @@
 {
   "name": "palisade",
   "version": "1.0.0",
-  "description": "The Compound Web3 Front-end",
+  "description": "The grove Web3 Front-end",
   "main": "index.js",
   "scripts": {
     "build": "node --unhandled-rejections=strict --max-old-space-size=8192 scripts/build.js",
@@ -37,8 +37,7 @@
     "chalk": "^4.0.0",
     "clean-webpack-plugin": "^3.0.0",
     "cli-table": "0.3.1",
-    "compound-components": "https://github.com/compound-finance/compound-components.git#6b033ba07607d6a6abb9a2018c2b243e14d2fef5",
-    "compound-config": "https://github.com/compound-finance/compound-config.git#ff8e979ffcb286d09884163cc928688f213abe71",
+    "grove-config": "https://github.com/mruthunj4y/grove-config-pers.git#208a8899a63be5407d46456fbbb8dae307237030",
     "connect-history-api-fallback": "^1.5.0",
     "core-js": "3",
     "cross-spawn": "^7.0.2",
@@ -52,6 +51,7 @@
     "ethjs-provider-signer": "^0.1.4",
     "file-loader": "^6.0.0",
     "fs-extra": "^9.0.0",
+    "grove-components": "https://github.com/mruthunj4y/grove-components.git#8da966075dfc63f819e433a68d8f64e55f5f8267",
     "html-webpack-plugin": "4.2.1",
     "http-proxy-middleware": "^1.0.3",
     "mini-css-extract-plugin": "^0.9.0",
@@ -80,7 +80,7 @@
   "devDependencies": {
     "elm-format": "=0.8.5",
     "elm-test": "0.19.1-revision2",
-    "ethers": "^5.6.9",
+    "ethers": "^6.14.0",
     "express": "^4.17.1",
     "google-translate": "^3.0.0",
     "ipfs-http-client": "^52.0.1",

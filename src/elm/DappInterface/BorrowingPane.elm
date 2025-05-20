@@ -8,11 +8,11 @@ module DappInterface.BorrowingPane exposing
 
 import Balances
 import Bootstrap.Progress as Progress
-import CompoundComponents.DisplayCurrency as DisplayCurrency
-import CompoundComponents.Eth.Ethereum as Ethereum exposing (Account(..), CustomerAddress, getContractAddressString)
-import CompoundComponents.Functions as Functions
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (HrefLinkType(..), class, id, onClickStopPropagation)
-import CompoundComponents.Utils.NumberFormatter as NumberFormatter exposing (formatPercentageToNearestWhole, formatPercentageWithDots)
+import GroveComponents.DisplayCurrency as DisplayCurrency
+import GroveComponents.Eth.Ethereum as Ethereum exposing (Account(..), CustomerAddress, getContractAddressString)
+import GroveComponents.Functions as Functions
+import GroveComponents.Utils.GroveHtmlAttributes exposing (HrefLinkType(..), class, id, onClickStopPropagation)
+import GroveComponents.Utils.NumberFormatter as NumberFormatter exposing (formatPercentageToNearestWhole, formatPercentageWithDots)
 import DappInterface.MainModel exposing (BorrowingRisk(..), Model)
 import Decimal exposing (Decimal)
 import Dict
@@ -37,13 +37,13 @@ type Msg
 
 
 view : Maybe Config -> Maybe Decimal -> Model -> Html Msg
-view maybeConfig maybeEtherUsdPrice ({ compoundState, oracleState, tokenState, userLanguage } as model) =
+view maybeConfig maybeEtherUsdPrice ({ groveState, oracleState, tokenState, userLanguage } as model) =
     let
         allCTokensList =
-            CTokenHelper.getAllSupportedCTokens compoundState tokenState CTokenHelper.ForBorrow
+            CTokenHelper.getAllSupportedCTokens groveState tokenState CTokenHelper.ForBorrow
 
         balanceTotalsUsd =
-            Balances.getUnderlyingTotalsInUsd compoundState allCTokensList oracleState
+            Balances.getUnderlyingTotalsInUsd groveState allCTokensList oracleState
 
         headerTitleText =
             if Decimal.gt balanceTotalsUsd.totalBorrow Decimal.zero then
@@ -160,7 +160,7 @@ pendingTransactionsPanel _ { currentTime, currentTimeZone, network, account, tok
 
 
 allMarketsListPanel : Maybe Config -> Maybe Decimal -> Model -> Html Msg
-allMarketsListPanel maybeConfig maybeEtherUsdPrice ({ account, compoundState, preferences, userLanguage } as model) =
+allMarketsListPanel maybeConfig maybeEtherUsdPrice ({ account, groveState, preferences, userLanguage } as model) =
     let
         allBorrowableAssets =
             getReadyBorrowedAssets model False
@@ -168,7 +168,7 @@ allMarketsListPanel maybeConfig maybeEtherUsdPrice ({ account, compoundState, pr
                     (\readyAsset ->
                         let
                             supplyBalance =
-                                Balances.getUnderlyingBalances compoundState readyAsset.cToken.contractAddress
+                                Balances.getUnderlyingBalances groveState readyAsset.cToken.contractAddress
                                     |> Maybe.map .underlyingSupplyBalance
                                     |> Maybe.withDefault Decimal.zero
                         in
@@ -260,19 +260,19 @@ getAllMarketsPanelContent config maybeEtherUsdPrice addPanelClass allBorrowableA
 
 
 borrowedAssetRow : Bool -> Config -> ( Maybe CustomerAddress, Maybe Decimal ) -> Maybe Decimal -> Model -> ReadyBorrowedAsset -> Html Msg
-borrowedAssetRow isAllMarketsRow config ( maybeCustomerAddress, maybeEtherBalance ) maybeEtherUsdPrice { compoundState, tokenState, oracleState, preferences, userLanguage } { cToken, borrowBalance, tokenValueUsd, maybeBorrowInterestAccrued, borrowInterestRate, underlyingCash } =
+borrowedAssetRow isAllMarketsRow config ( maybeCustomerAddress, maybeEtherBalance ) maybeEtherUsdPrice { groveState, tokenState, oracleState, preferences, userLanguage } { cToken, borrowBalance, tokenValueUsd, maybeBorrowInterestAccrued, borrowInterestRate, underlyingCash } =
     let
         allCTokensList =
-            CTokenHelper.getAllSupportedCTokens compoundState tokenState CTokenHelper.ForBorrow
+            CTokenHelper.getAllSupportedCTokens groveState tokenState CTokenHelper.ForBorrow
 
         balanceTotalsUsd =
-            Balances.getUnderlyingTotalsInUsd compoundState allCTokensList oracleState
+            Balances.getUnderlyingTotalsInUsd groveState allCTokensList oracleState
 
         supplyLiquidity =
             Decimal.mul underlyingCash tokenValueUsd
 
         maybeCTokenMetadata =
-            Dict.get (getContractAddressString cToken.contractAddress) compoundState.cTokensMetadata
+            Dict.get (getContractAddressString cToken.contractAddress) groveState.cTokensMetadata
 
         liquidityUsd =
             case maybeCTokenMetadata of
@@ -293,13 +293,13 @@ borrowedAssetRow isAllMarketsRow config ( maybeCustomerAddress, maybeEtherBalanc
             maybeCustomerAddress
                 |> Maybe.map
                     (\customerAddress ->
-                        Balances.getWalletBalanceNonSafeEther config (Acct customerAddress maybeEtherBalance) compoundState cToken
+                        Balances.getWalletBalanceNonSafeEther config (Acct customerAddress maybeEtherBalance) groveState cToken
                     )
                 |> Functions.demaybeify
                 |> Maybe.withDefault Decimal.zero
 
         accountLiquidityUsd =
-            compoundState.maybeAccountLiquidityUsd
+            groveState.maybeAccountLiquidityUsd
                 |> Maybe.withDefault Decimal.zero
 
         totalBorrowLimitUsd =
@@ -388,10 +388,10 @@ type alias ReadyBorrowedAsset =
 
 
 getReadyBorrowedAssets : Model -> Bool -> List ReadyBorrowedAsset
-getReadyBorrowedAssets { compoundState, oracleState, tokenState } applyNonZeroBalanceFilter =
+getReadyBorrowedAssets { groveState, oracleState, tokenState } applyNonZeroBalanceFilter =
     let
         allCTokensList =
-            CTokenHelper.getAllSupportedCTokens compoundState tokenState CTokenHelper.ForBorrow
+            CTokenHelper.getAllSupportedCTokens groveState tokenState CTokenHelper.ForBorrow
 
         borrowedCTokensList =
             if applyNonZeroBalanceFilter then
@@ -400,7 +400,7 @@ getReadyBorrowedAssets { compoundState, oracleState, tokenState } applyNonZeroBa
                         (\cToken ->
                             let
                                 borrowBalance =
-                                    Balances.getUnderlyingBalances compoundState cToken.contractAddress
+                                    Balances.getUnderlyingBalances groveState cToken.contractAddress
                                         |> Maybe.map .underlyingBorrowBalance
                                         |> Maybe.withDefault Decimal.zero
                             in
@@ -419,7 +419,7 @@ getReadyBorrowedAssets { compoundState, oracleState, tokenState } applyNonZeroBa
             (\cToken_ ->
                 let
                     underlyingBalances =
-                        Balances.getUnderlyingBalances compoundState cToken_.contractAddress
+                        Balances.getUnderlyingBalances groveState cToken_.contractAddress
 
                     maybeBorrowBalance =
                         underlyingBalances
@@ -429,7 +429,7 @@ getReadyBorrowedAssets { compoundState, oracleState, tokenState } applyNonZeroBa
                         Eth.Oracle.getOraclePrice oracleState cToken_.underlying
 
                     underlyingInterestBalances =
-                        Balances.getUnderlyingInterestBalances compoundState cToken_.contractAddress
+                        Balances.getUnderlyingInterestBalances groveState cToken_.contractAddress
 
                     maybeBorrowInterestAccrued_ =
                         underlyingInterestBalances
@@ -437,11 +437,11 @@ getReadyBorrowedAssets { compoundState, oracleState, tokenState } applyNonZeroBa
                             |> Functions.demaybeify
 
                     maybeBorrowInterestRate =
-                        Balances.getInterestRate compoundState.cTokensMetadata cToken_.contractAddress
+                        Balances.getInterestRate groveState.cTokensMetadata cToken_.contractAddress
                             |> Maybe.map .borrowRate
 
                     maybeUnderlyingCash =
-                        compoundState.cTokensMetadata
+                        groveState.cTokensMetadata
                             |> Dict.get (Ethereum.getContractAddressString cToken_.contractAddress)
                             |> Maybe.map .totalUnderlyingCash
                 in
@@ -463,10 +463,10 @@ getReadyBorrowedAssets { compoundState, oracleState, tokenState } applyNonZeroBa
 
 
 getReadyBorrowedAssetsForNoAccount : Model -> List ReadyBorrowedAsset
-getReadyBorrowedAssetsForNoAccount { compoundState, oracleState, tokenState } =
+getReadyBorrowedAssetsForNoAccount { groveState, oracleState, tokenState } =
     let
         allCTokensList =
-            CTokenHelper.getAllSupportedCTokens compoundState tokenState CTokenHelper.ForBorrow
+            CTokenHelper.getAllSupportedCTokens groveState tokenState CTokenHelper.ForBorrow
     in
     allCTokensList
         |> List.filterMap
@@ -476,11 +476,11 @@ getReadyBorrowedAssetsForNoAccount { compoundState, oracleState, tokenState } =
                         Eth.Oracle.getOraclePrice oracleState cToken_.underlying
 
                     maybeBorrowInterestRate =
-                        Balances.getInterestRate compoundState.cTokensMetadata cToken_.contractAddress
+                        Balances.getInterestRate groveState.cTokensMetadata cToken_.contractAddress
                             |> Maybe.map .borrowRate
 
                     maybeUnderlyingCash =
-                        compoundState.cTokensMetadata
+                        groveState.cTokensMetadata
                             |> Dict.get (Ethereum.getContractAddressString cToken_.contractAddress)
                             |> Maybe.map .totalUnderlyingCash
                 in
@@ -501,10 +501,10 @@ getReadyBorrowedAssetsForNoAccount { compoundState, oracleState, tokenState } =
 
 
 areAllAssetsLoaded : Model -> Bool
-areAllAssetsLoaded ({ account, compoundState, tokenState } as model) =
+areAllAssetsLoaded ({ account, groveState, tokenState } as model) =
     let
         allCTokensList =
-            CTokenHelper.getAllSupportedCTokens compoundState tokenState CTokenHelper.ForBorrow
+            CTokenHelper.getAllSupportedCTokens groveState tokenState CTokenHelper.ForBorrow
 
         readyBorrowedAssets =
             case account of

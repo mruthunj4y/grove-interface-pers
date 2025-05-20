@@ -1,5 +1,5 @@
 const googleTranslate = require('google-translate');
-const {getLangFile} = require('./i18n');
+const { getLangFile } = require('./i18n');
 const fs = require('fs');
 const util = require('util');
 
@@ -20,24 +20,27 @@ async function writeLangFile(source, lang, values) {
   const fileName = `src/strings/strings.${lang}.json`;
 
   const json = JSON.stringify(values, null, 4);
-  const sourceLines = sourceFile.split("\n");
-  const destLines = json.split("\n");
-  const {result, restLines} = sourceLines.reduce(({result, restLines}, sourceLine) => {
-    if (sourceLine.match(/^\s*$/)) {
-      return {
-        result: result.concat(sourceLine),
-        restLines
-      };
-    } else {
-      const [x, ...xs] = restLines;
+  const sourceLines = sourceFile.split('\n');
+  const destLines = json.split('\n');
+  const { result, restLines } = sourceLines.reduce(
+    ({ result, restLines }, sourceLine) => {
+      if (sourceLine.match(/^\s*$/)) {
+        return {
+          result: result.concat(sourceLine),
+          restLines,
+        };
+      } else {
+        const [x, ...xs] = restLines;
 
-      return {
-        result: result.concat(x),
-        restLines: xs
-      };
-    }
-  }, {result: [], restLines: destLines})
-  const totalResult = result.concat(restLines).join("\n");
+        return {
+          result: result.concat(x),
+          restLines: xs,
+        };
+      }
+    },
+    { result: [], restLines: destLines }
+  );
+  const totalResult = result.concat(restLines).join('\n');
 
   if (destFile !== totalResult) {
     console.log(`Saving ${fileName}...`);
@@ -64,80 +67,80 @@ async function translate(apiKey, source, languages) {
 
   const langs = await languages.reduce(async (acc, lang) => {
     return {
-      ...await acc,
-      [lang]: JSON.parse(await readLangFile(lang))
+      ...(await acc),
+      [lang]: JSON.parse(await readLangFile(lang)),
     };
   }, Promise.resolve({}));
 
   const translationsNeeded = Object.entries(langs).reduce((acc, [lang, values]) => {
-    const givenKeys =
-      Object.entries(values)
+    const givenKeys = Object.entries(values)
       .filter(([k, v]) => !!v)
       .map(([k, v]) => k);
 
     const langKeys = new Set(givenKeys);
-    const missing = difference(inputKeys, langKeys)
+    const missing = difference(inputKeys, langKeys);
 
     const langTranslationsNeeded = [...missing].map((key) => {
       return {
         key,
-        text: input[key]
+        text: input[key],
       };
     });
 
     return {
       ...acc,
-      [lang]: langTranslationsNeeded
+      [lang]: langTranslationsNeeded,
     };
   }, {});
 
-  const translated = await Promise.all(Object.entries(translationsNeeded).map(async ([lang, translationsNeeded]) => {
-    const texts = translationsNeeded.map(({text}) => text);
-    let translationTexts;
+  const translated = await Promise.all(
+    Object.entries(translationsNeeded).map(async ([lang, translationsNeeded]) => {
+      const texts = translationsNeeded.map(({ text }) => text);
+      let translationTexts;
 
-    if (texts.length === 0) {
-      translationTexts = [];
-    } else if (apiKey) {
-      translationTexts = await translate(texts, source, lang);
-    } else {
-      translationTexts = translationsNeeded.map(({text}) => {
-        return { 
-          originalText: text,
-          translatedText: text
-
-        }
-      });
-    }
-
-    if (!Array.isArray(translationTexts)) {
-      translationTexts = [translationTexts];
-    }
-
-    const translations = translationsNeeded.map((t, i) => {
-      return {
-        ...t,
-        translation: translationTexts[i].translatedText
+      if (texts.length === 0) {
+        translationTexts = [];
+      } else if (apiKey) {
+        translationTexts = await translate(texts, source, lang);
+      } else {
+        translationTexts = translationsNeeded.map(({ text }) => {
+          return {
+            originalText: text,
+            translatedText: text,
+          };
+        });
       }
-    });
 
-    return {
-      lang,
-      translations
-    }
-  }));
+      if (!Array.isArray(translationTexts)) {
+        translationTexts = [translationTexts];
+      }
 
-  const langTranslations = translated.reduce((acc, {lang, translations}) => {
-    const langValues = translations.reduce((acc, {key, translation}) => {
+      const translations = translationsNeeded.map((t, i) => {
+        return {
+          ...t,
+          translation: translationTexts[i].translatedText,
+        };
+      });
+
+      return {
+        lang,
+        translations,
+      };
+    })
+  );
+
+  const langTranslations = translated.reduce((acc, { lang, translations }) => {
+    const langValues = translations.reduce((acc, { key, translation }) => {
       return {
         ...acc,
-        [key]: translation
+        [key]: translation,
       };
     }, langs[lang]);
 
     const maybeOrdered = Object.keys(input).reduce((acc, key) => {
       return {
         ...acc,
-        [key]: langValues[key]
+        [key]: langValues[key],
       };
     }, {});
 
@@ -146,8 +149,8 @@ async function translate(apiKey, source, languages) {
       [lang]: {
         translations: translations,
         values: maybeOrdered,
-        original: langs[lang]
-      }
+        original: langs[lang],
+      },
     };
   }, {});
 
@@ -163,5 +166,5 @@ async function translate(apiKey, source, languages) {
 module.exports = {
   translate,
   readLangFile,
-  writeLangFile
+  writeLangFile,
 };

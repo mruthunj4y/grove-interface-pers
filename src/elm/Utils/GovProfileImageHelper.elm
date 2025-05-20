@@ -1,6 +1,6 @@
 module Utils.GovProfileImageHelper exposing (ImageHelperMsg(..), ProfileImageConfig, ProfileImageSize(..), profileImage)
 
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (class, id, onError, src)
+import GroveComponents.Utils.GroveHtmlAttributes exposing (class, id, onError, src)
 import Html exposing (Html, div, img, span, text)
 
 

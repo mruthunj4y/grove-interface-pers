@@ -6,7 +6,7 @@ port module Eth.Governance exposing
     , askDelegateTo
     , clearState
     , getCompAccruedBalance
-    , getCompoundGovernanceTokenBalance
+    , getGroveGovernanceTokenBalance
     , getCurrentVotes
     , getDelegateTotalBalance
     , getDelegatedAddress
@@ -16,15 +16,18 @@ port module Eth.Governance exposing
     , update
     )
 
-import CompoundComponents.Console as Console
-import CompoundComponents.Eth.Decoders exposing (decimal, decodeCustomerAddress)
-import CompoundComponents.Eth.Ethereum exposing (Account(..), ContractAddress(..), CustomerAddress(..), getCustomerAddressString)
-import CompoundComponents.Functions exposing (handleError)
+import GroveComponents.Console as Console
+import GroveComponents.Eth.Decoders exposing (decimal, decodeCustomerAddress)
+import GroveComponents.Eth.Ethereum exposing (Account(..), ContractAddress(..), CustomerAddress(..), getCustomerAddressString)
+import GroveComponents.Functions exposing (handleError)
 import Decimal exposing (Decimal)
 import Dict exposing (Dict)
 import Eth.Config exposing (Config, TokenConfig)
 import Json.Decode exposing (Value, decodeValue, field)
 
+
+-- Commenting out unnecessary governance functions
+-- Keeping only core functionality needed for basic governance
 
 type alias GovernanceState =
     { governanceTokenBalances : Dict String Decimal -- key user address
@@ -162,8 +165,8 @@ clearState =
     emptyState
 
 
-getCompoundGovernanceTokenBalance : CustomerAddress -> GovernanceState -> Maybe Decimal
-getCompoundGovernanceTokenBalance customerAddress { governanceTokenBalances } =
+getGroveGovernanceTokenBalance : CustomerAddress -> GovernanceState -> Maybe Decimal
+getGroveGovernanceTokenBalance customerAddress { governanceTokenBalances } =
     let
         lowercaseCustomerAddressString =
             getCustomerAddressString customerAddress

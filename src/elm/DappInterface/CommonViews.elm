@@ -12,14 +12,14 @@ module DappInterface.CommonViews exposing
     , update
     )
 
-import CompoundComponents.DisplayCurrency exposing (DisplayCurrency(..))
-import CompoundComponents.Eth.ConnectedEthWallet as EthConnectedWallet
-import CompoundComponents.Eth.Ethereum exposing (Account(..), CustomerAddress(..), shortenedAddressString)
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (HrefLinkType(..), class, href, id, onClickStopPropagation, style, target)
-import CompoundComponents.Utils.NumberFormatter exposing (formatBlockNumber, formatCompAndVoteBalance, formatToDecimalPlaces)
+import GroveComponents.DisplayCurrency exposing (DisplayCurrency(..))
+import GroveComponents.Eth.ConnectedEthWallet as EthConnectedWallet
+import GroveComponents.Eth.Ethereum exposing (Account(..), CustomerAddress(..), shortenedAddressString)
+import GroveComponents.Utils.GroveHtmlAttributes exposing (HrefLinkType(..), class, href, id, onClickStopPropagation, style, target)
+import GroveComponents.Utils.NumberFormatter exposing (formatBlockNumber, formatCompAndVoteBalance, formatToDecimalPlaces)
 import DappInterface.Page exposing (Page(..), getHrefUrl)
 import Decimal exposing (Decimal)
-import Eth.Governance exposing (GovernanceState, getCompAccruedBalance, getCompoundGovernanceTokenBalance)
+import Eth.Governance exposing (GovernanceState, getCompAccruedBalance, getGroveGovernanceTokenBalance)
 import Html exposing (Html, a, div, footer, header, label, span, text)
 import Html.Events exposing (onClick)
 import Preferences exposing (Preferences, PreferencesMsg(..))
@@ -172,21 +172,21 @@ pageHeader userLanguage page connectedWallet account _ governanceState _ =
                             emptyClasses
 
                 v2MarketsExternalLink =
-                    "https://app.compound.finance/markets/v2"
+                    "http://localhost:3000/"
 
-                v3VoteExternalLink =
-                    "https://app.compound.finance/vote"
+                -- v3VoteExternalLink =
+                --     "https://app.compound.finance/vote"
             in
             [ a (class homeClass :: href PageNavigation (getHrefUrl Home)) [ text (Translations.dashboard userLanguage) ]
             , a (href External v2MarketsExternalLink) [ text (Translations.markets userLanguage) ]
-            , a (href External v3VoteExternalLink) [ text (Translations.vote userLanguage) ]
+            -- , a (href External v3VoteExternalLink) [ text (Translations.vote userLanguage) ]
             ]
     in
     header [ class "dapp" ]
         [ div [ class "container-large" ]
             [ div [ class "row align-middle" ]
                 [ div [ class "col-xs-3 col-sm-4" ]
-                    [ a (class "brand" :: href External "https://compound.finance") []
+                    [ a (class "brand" :: href External "/") []
                     ]
                 , div [ class "col-xs-5 col-sm-4 mobile-hide text-center links" ] links
                 , div [ class "col-xs-9 col-sm-4 text-right actions" ]
@@ -229,7 +229,7 @@ pageFooter userLanguage maybeBlockNumber preferences model =
                         [ span [ class ("dot-indicator" ++ indicatorColorClass) ] []
                         , label [ class "small" ] [ text (Translations.latest_block userLanguage (formatBlockNumber maybeBlockNumber)) ]
                         , a (target "_blank" :: href External "https://app.compound.finance/markets/v2") [ text (Translations.markets userLanguage) ]
-                        , a (target "_blank" :: href External "https://compound.finance/governance") [ text (Translations.governance userLanguage) ]
+                        -- , a (target "_blank" :: href External "https://compound.finance/governance") [ text (Translations.governance userLanguage) ]
                         , a (target "_blank" :: href External "https://compound.finance/governance/comp") [ text (Translations.comp userLanguage) ]
                         , a (target "_blank" :: href External "https://medium.com/compound-finance/the-compound-guide-to-supplying-borrowing-crypto-assets-94821f2950a0") [ text (Translations.support userLanguage) ]
                         , a (href PageNavigation (getHrefUrl TermsOfService)) [ text (Translations.terms userLanguage) ]
@@ -255,7 +255,7 @@ compBalanceView account governanceState =
     in
     case account of
         Acct customer _ ->
-            case ( getCompoundGovernanceTokenBalance customer governanceState, getCompAccruedBalance customer governanceState ) of
+            case ( getGroveGovernanceTokenBalance customer governanceState, getCompAccruedBalance customer governanceState ) of
                 ( Just balance, Just accrued ) ->
                     let
                         total =

@@ -1,6 +1,6 @@
 module DappInterface.Terms exposing (view)
 
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (HrefLinkType(..), class, href, id, type_)
+import GroveComponents.Utils.GroveHtmlAttributes exposing (HrefLinkType(..), class, href, id, type_)
 import Html exposing (Html, a, b, div, h2, h4, label, li, ol, p, section, span, text, u)
 import Strings.Terms as Terms
 import Strings.Translations as Translations

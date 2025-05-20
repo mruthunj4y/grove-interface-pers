@@ -1,21 +1,21 @@
 module DappInterface.ClaimCompModal exposing (..)
 
-import CompoundComponents.DisplayCurrency as DisplayCurrency
-import CompoundComponents.Eth.Ethereum as Ethereum exposing (Account(..), CustomerAddress, getContractAddressString)
-import CompoundComponents.Eth.Network exposing (Network(..))
-import CompoundComponents.Utils.CompoundHtmlAttributes exposing (HrefLinkType(..), class, disabled, href, id, onClickStopPropagation, onError, placeholder, src, style, target, type_)
-import CompoundComponents.Utils.NumberFormatter as NumberFormatter exposing (formatToDecimalPlaces)
+import GroveComponents.DisplayCurrency as DisplayCurrency
+import GroveComponents.Eth.Ethereum as Ethereum exposing (Account(..), CustomerAddress, getContractAddressString)
+import GroveComponents.Eth.Network exposing (Network(..))
+import GroveComponents.Utils.GroveHtmlAttributes exposing (HrefLinkType(..), class, disabled, href, id, onClickStopPropagation, onError, placeholder, src, style, target, type_)
+import GroveComponents.Utils.NumberFormatter as NumberFormatter exposing (formatToDecimalPlaces)
 import DappInterface.CommonViews exposing (compOrVoteBalanceSpan)
 import Decimal exposing (Decimal)
 import Dict
-import Eth.Compound exposing (CompoundState)
+import Eth.Grove exposing (GroveState)
 import Eth.Config exposing (Config)
 import Eth.Governance
     exposing
         ( GovernanceMsg(..)
         , GovernanceState
         , getCompAccruedBalance
-        , getCompoundGovernanceTokenBalance
+        , getGroveGovernanceTokenBalance
         )
 import Eth.Oracle exposing (OracleState)
 import Eth.Token exposing (TokenState)
@@ -145,15 +145,15 @@ getPendingClaimCompTransaction network customer transactionState =
         |> List.head
 
 
-update : InternalMsg -> Maybe Config -> Account -> CompoundState -> Model -> ( Model, Cmd Msg )
-update internalMsg maybeConfig account compoundState model =
+update : InternalMsg -> Maybe Config -> Account -> GroveState -> Model -> ( Model, Cmd Msg )
+update internalMsg maybeConfig account groveState model =
     case internalMsg of
         ClaimCompClicked estimateComp ->
             case ( maybeConfig, account ) of
                 ( Just config, Acct customer _ ) ->
                     let
                         marketsWithBalances =
-                            Dict.toList compoundState.balances
+                            Dict.toList groveState.balances
                                 |> List.filterMap
                                     (\( cTokenAddress, balances ) ->
                                         if Decimal.gt balances.cTokenWalletBalance Decimal.zero || Decimal.gt balances.underlyingBorrowBalance Decimal.zero then
@@ -257,7 +257,7 @@ view userLanguage maybeConfig maybeNetwork account tokenState oracleState transa
                                             maybeNetwork
                                             (Ethereum.TransactionHash transaction.trxHash)
                                             [ class "submit-button button main claim-comp__modal__body__button" ]
-                                            [ text (Translations.view_on_etherscan userLanguage) ]
+                                            [ text (Translations.view_on_xrpl_explorer userLanguage) ]
                                     )
                                 |> Maybe.withDefault (text "")
                     in
@@ -276,7 +276,7 @@ view userLanguage maybeConfig maybeNetwork account tokenState oracleState transa
                                 |> Maybe.withDefault Decimal.zero
 
                         compBalance =
-                            getCompoundGovernanceTokenBalance accountAddress governanceState
+                            getGroveGovernanceTokenBalance accountAddress governanceState
                                 |> Maybe.withDefault Decimal.zero
 
                         totalComp =

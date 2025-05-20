@@ -2,7 +2,7 @@
 pragma solidity ^0.8.15;
 
 interface CErc20Interface {
-  function underlying() external view returns (address);
+    function underlying() external view returns (address);
 }
 
 interface CTokenInterface {
@@ -14,12 +14,9 @@ interface CTokenInterface {
     function borrowBalanceCurrent(address account) external returns (uint);
     function exchangeRateCurrent() external returns (uint);
     function getCash() external view returns (uint);
-
     function comptroller() external returns (address);
-
     function symbol() external view returns (string memory);
     function decimals() external view returns (uint8);
-
     function reserveFactorMantissa() external view returns (uint);
     function totalBorrows() external view returns (uint);
     function totalReserves() external view returns (uint);
@@ -129,46 +126,26 @@ contract SleuthLens {
     }
 
     function getCompSpeeds(ComptrollerLensInterface comptroller, CTokenInterface cToken) internal returns (uint, uint) {
-        // Getting comp speeds is gnarly due to not every network having the
-        // split comp speeds from Proposal 62 and other networks don't even
-        // have comp speeds.
         uint compSupplySpeed = 0;
-        (bool compSupplySpeedSuccess, bytes memory compSupplySpeedReturnData) =
-            address(comptroller).call(
-                abi.encodePacked(
-                    comptroller.compSupplySpeeds.selector,
-                    abi.encode(address(cToken))
-                )
-            );
-        if (compSupplySpeedSuccess) {
-            compSupplySpeed = abi.decode(compSupplySpeedReturnData, (uint));
-        }
-
         uint compBorrowSpeed = 0;
-        (bool compBorrowSpeedSuccess, bytes memory compBorrowSpeedReturnData) =
-            address(comptroller).call(
-                abi.encodePacked(
-                    comptroller.compBorrowSpeeds.selector,
-                    abi.encode(address(cToken))
-                )
-            );
-        if (compBorrowSpeedSuccess) {
-            compBorrowSpeed = abi.decode(compBorrowSpeedReturnData, (uint));
+        
+        // Try to get split comp speeds first
+        try comptroller.compSupplySpeeds(address(cToken)) returns (uint supplySpeed) {
+            compSupplySpeed = supplySpeed;
+        } catch {}
+        
+        try comptroller.compBorrowSpeeds(address(cToken)) returns (uint borrowSpeed) {
+            compBorrowSpeed = borrowSpeed;
+        } catch {}
+        
+        // If split speeds failed, try the old single speed
+        if (compSupplySpeed == 0 && compBorrowSpeed == 0) {
+            try comptroller.compSpeeds(address(cToken)) returns (uint speed) {
+                compSupplySpeed = speed;
+                compBorrowSpeed = speed;
+            } catch {}
         }
-
-        // If the split comp speeds call doesn't work, try the  oldest non-spit version.
-        if (!compSupplySpeedSuccess || !compBorrowSpeedSuccess) {
-            (bool compSpeedSuccess, bytes memory compSpeedReturnData) =
-            address(comptroller).call(
-                abi.encodePacked(
-                    comptroller.compSpeeds.selector,
-                    abi.encode(address(cToken))
-                )
-            );
-            if (compSpeedSuccess) {
-                compSupplySpeed = compBorrowSpeed = abi.decode(compSpeedReturnData, (uint));
-            }
-        }
+        
         return (compSupplySpeed, compBorrowSpeed);
     }
 
@@ -179,6 +156,7 @@ contract SleuthLens {
         address underlyingAssetAddress;
         uint underlyingDecimals;
 
+        // Check if it's a cETH or cErc20
         if (compareStrings(cToken.symbol(), "cETH")) {
             underlyingAssetAddress = address(0);
             underlyingDecimals = 18;
@@ -191,16 +169,9 @@ contract SleuthLens {
         (uint compSupplySpeed, uint compBorrowSpeed) = getCompSpeeds(comptroller, cToken);
 
         uint borrowCap = 0;
-        (bool borrowCapSuccess, bytes memory borrowCapReturnData) =
-            address(comptroller).call(
-                abi.encodePacked(
-                    comptroller.borrowCaps.selector,
-                    abi.encode(address(cToken))
-                )
-            );
-        if (borrowCapSuccess) {
-            borrowCap = abi.decode(borrowCapReturnData, (uint));
-        }
+        try comptroller.borrowCaps(address(cToken)) returns (uint cap) {
+            borrowCap = cap;
+        } catch {}
 
         PriceOracleInterface priceOracle = comptroller.oracle();
 
@@ -230,12 +201,14 @@ contract SleuthLens {
     function queryAllNoAccount(CTokenInterface[] calldata cTokens) external returns (NoAccountAllData memory) {
         uint cTokenCount = cTokens.length;
         CTokenAllData[] memory cTokensRes = new CTokenAllData[](cTokenCount);
+        
         for (uint i = 0; i < cTokenCount; i++) {
             cTokensRes[i] = buildCTokenAllData(cTokens[i]);
         }
 
         uint liquidationIncentive = 0;
         uint closeFactor = 0;
+        
         if(cTokenCount > 0) {
             ComptrollerLensInterface comptroller = ComptrollerLensInterface(address(cTokens[0].comptroller()));
             liquidationIncentive = comptroller.liquidationIncentiveMantissa();
@@ -293,7 +266,7 @@ contract SleuthLens {
 
     function getAccountLimits(ComptrollerLensInterface comptroller, address account) public view returns (AccountLimits memory) {
         (uint errorCode, uint liquidity, uint shortfall) = comptroller.getAccountLiquidity(account);
-        require(errorCode == 0);
+        require(errorCode == 0, "getAccountLiquidity failed");
 
         return AccountLimits({
             markets: comptroller.getAssetsIn(account),
@@ -328,6 +301,7 @@ contract SleuthLens {
     function queryAllWithAccount(CTokenInterface[] calldata cTokens, address payable account, CompInterface comp, address capFactory) external returns (AccountAllData memory) {
         uint cTokenCount = cTokens.length;
         CTokenAllDataWithAccount[] memory cTokensRes = new CTokenAllDataWithAccount[](cTokenCount);
+        
         for (uint i = 0; i < cTokenCount; i++) {
             CTokenAllData memory cTokenAllData = buildCTokenAllData(cTokens[i]);
             CTokenBalances memory cTokenBalance = cTokenBalances(cTokens[i], account);
@@ -362,17 +336,15 @@ contract SleuthLens {
 
         uint liquidationIncentive = 0;
         uint closeFactor = 0;
-
         CTokenInterface[] memory accountMarketsIn;
         uint liquidity = 0;
         uint shortfall = 0;
-
         uint compBalance = 0;
         uint compVotes = 0;
         address compDelegate;
         uint compAllocated = 0;
-
         uint capFactoryAllowance = 0;
+
         if(cTokenCount > 0) {
             ComptrollerLensInterface comptroller = ComptrollerLensInterface(address(cTokens[0].comptroller()));
             liquidationIncentive = comptroller.liquidationIncentiveMantissa();
@@ -389,8 +361,10 @@ contract SleuthLens {
             compDelegate = compMetadata.delegate;
             compAllocated = compMetadata.allocated;
 
-            EIP20Interface compEIP20 = EIP20Interface(address(comp));
-            capFactoryAllowance = compEIP20.allowance(account, capFactory);
+            if (capFactory != address(0)) {
+                EIP20Interface compEIP20 = EIP20Interface(address(comp));
+                capFactoryAllowance = compEIP20.allowance(account, capFactory);
+            }
         }
 
         return AccountAllData({

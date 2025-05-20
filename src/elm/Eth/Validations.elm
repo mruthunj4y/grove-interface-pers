@@ -1,11 +1,11 @@
 module Eth.Validations exposing (hasSufficientBalanceForSupply, hasSufficientCollateralForBorrow)
 
 import Balances
-import CompoundComponents.Eth.Ethereum exposing (Account(..), AssetAddress(..), CustomerAddress(..))
-import CompoundComponents.Eth.Ledger exposing (LedgerAccount(..))
+import GroveComponents.Eth.Ethereum exposing (Account(..), AssetAddress(..), CustomerAddress(..))
+import GroveComponents.Eth.Ledger exposing (LedgerAccount(..))
 import Decimal exposing (Decimal)
 import Dict exposing (Dict)
-import Eth.Compound exposing (CompoundState)
+import Eth.Grove exposing (GroveState)
 import Eth.Config exposing (Config)
 import Eth.Oracle exposing (OracleState)
 import Eth.Token exposing (CToken, Token, TokenState)
@@ -25,9 +25,9 @@ import Eth.Token exposing (CToken, Token, TokenState)
 -}
 
 
-hasSufficientBalanceForSupply : Config -> Account -> CompoundState -> CToken -> Decimal -> Bool
-hasSufficientBalanceForSupply config account compoundState cToken amount =
-    case Balances.getWalletBalanceSafeEther config account compoundState cToken of
+hasSufficientBalanceForSupply : Config -> Account -> GroveState -> CToken -> Decimal -> Bool
+hasSufficientBalanceForSupply config account groveState cToken amount =
+    case Balances.getWalletBalanceSafeEther config account groveState cToken of
         Just balance ->
             Decimal.gte balance amount
 

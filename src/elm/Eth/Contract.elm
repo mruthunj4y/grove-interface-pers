@@ -1,6 +1,6 @@
 module Eth.Contract exposing (ContractInfo, contractList)
 
-import CompoundComponents.Eth.Ethereum exposing (ContractAddress(..), getContractAddressString)
+import GroveComponents.Eth.Ethereum exposing (ContractAddress(..), getContractAddressString)
 import Dict
 import Eth.Config exposing (Config)
 
@@ -35,27 +35,8 @@ contractList maybeNetworkConfig =
                             }
 
                         expendableContracts =
-                            [ Maybe.map (namedContract "Timelock") config.maybeTimelock
-                            , Maybe.map (namedContract "CErc20Delegate") config.maybeCErc20Delegate
-                            , Maybe.map (namedContract "CDaiDelegate") config.maybeCDaiDelegate
-                            , Maybe.map (namedContract "StdComptrollerG3") config.maybeComptrollerG3
-                            , Maybe.map (namedContract "Starport") config.maybeStarport
-                            , Maybe.map (namedContract "cUSDCv3") config.maybeCUSDCv3
-                            , Maybe.map (friendlyNamedContract "Configurator (v3)" "Configurator") config.maybeCUSDCv3Configurator
-                            , Maybe.map (namedContract "Compoundv3Admin") config.maybeCUSDCv3Admin
-                            , Maybe.map (namedContract "Compoundv3Rewards") config.maybeCUSDCv3Rewards
-                            , Maybe.map (namedContract "Bulker") config.maybeCUSDCv3Bulker
-                            , Maybe.map
-                                (\( contractAddress, isBravo ) ->
-                                    if isBravo then
-                                        namedContract "GovernorBravo" contractAddress
+                            []  -- Removed all expendable contracts as they're not needed
 
-                                    else
-                                        namedContract "GovernorAlpha" contractAddress
-                                )
-                                config.maybeGovernor
-                            ]
-                                |> List.filterMap identity
                     in
                     [ { friendlyName = "Comptroller"
                         , abiName = "Comptroller"
@@ -85,12 +66,10 @@ contractList maybeNetworkConfig =
                                             , abiName = cTokenConfig.underlying.symbol
                                             , address = underlyingAddress 
                                             }
-
                                         ]
                                     )
                                 |> List.concat
                            )
-                        ++ expendableContracts
 
                 Nothing ->
                     []

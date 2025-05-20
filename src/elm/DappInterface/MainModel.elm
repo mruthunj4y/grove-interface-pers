@@ -19,11 +19,11 @@ module DappInterface.MainModel exposing
     )
 
 import Admin
-import CompoundComponents.DisplayCurrency exposing (DisplayCurrency(..))
-import CompoundComponents.Eth.ConnectedEthWallet as ConnectedEthWallet
-import CompoundComponents.Eth.Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..))
-import CompoundComponents.Eth.Network exposing (Network(..), networkName)
-import CompoundComponents.Ether.BNTransaction exposing (BNTransactionState)
+import GroveComponents.DisplayCurrency exposing (DisplayCurrency(..))
+import GroveComponents.Eth.ConnectedEthWallet as ConnectedEthWallet
+import GroveComponents.Eth.Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..))
+import GroveComponents.Eth.Network exposing (Network(..), networkName)
+import GroveComponents.Ether.BNTransaction exposing (BNTransactionState)
 import DOM exposing (Rectangle)
 import DappInterface.ClaimCompModal as ClaimCompModal
 import DappInterface.CommonViews as CommonViews
@@ -32,7 +32,7 @@ import DappInterface.Propose as Propose
 import DappInterface.Vote as Vote
 import Decimal exposing (Decimal)
 import Dict exposing (Dict)
-import Eth.Compound exposing (CompoundMsg(..), CompoundState)
+import Eth.Grove exposing (GroveMsg(..), GroveState)
 import Eth.Config exposing (Config)
 import Eth.Governance
 import Eth.Oracle exposing (OracleMsg(..), OracleState)
@@ -46,6 +46,7 @@ import Repl
 import Strings.Translations as Translations
 import Time
 import Utils.BrowserInfo
+import Debug
 
 
 type alias ScreenPosition =
@@ -148,7 +149,7 @@ type alias Model =
     , tokenState : TokenState
     , transactionState : TransactionState
     , bnTransactionState : BNTransactionState
-    , compoundState : CompoundState
+    , groveState : GroveState
     , oracleState : OracleState
     , blockNumber : Maybe Int
     , preferences : Preferences

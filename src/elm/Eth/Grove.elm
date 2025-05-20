@@ -1,0 +1,766 @@
+port module Eth.Grove exposing
+    ( CTokenBalances
+    , CTokenBalancesDict
+    , CTokenInterestBalances
+    , CTokenMetadata
+    , CTokenMetadataDict
+    , GroveMsg(..)
+    , GroveTransactionMsg(..)
+    , GroveState
+    , cTokenIsApproved
+    , cTokenIsLoaded
+    , clearGroveState
+    , groveInit
+    , groveNewBlockCmd
+    , groveSubscriptions
+    , groveUpdate
+    , handleAccountLiquidityCalculation
+    )
+
+import BigInt
+import GroveApi.Presidio.Accounts.Decoders exposing (accountsResponseDecoder)
+import GroveApi.Presidio.Accounts.Models exposing (AccountResponse)
+import GroveApi.Presidio.Accounts.Urls
+import GroveComponents.Console as Console
+import GroveComponents.Eth.Decoders exposing (decimal, decodeAssetAddress, decodeContractAddress, decodeCustomerAddress)
+import GroveComponents.Eth.Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), getContractAddressString, getCustomerAddressString)
+import GroveComponents.Eth.Network exposing (Network)
+import GroveComponents.Eth.TokenMath as TokenMath
+import GroveComponents.Ether.BNTransaction exposing (BNTransactionState)
+import GroveComponents.Ether.Helpers as EtherHelpers
+import GroveComponents.Functions exposing (handleError)
+import Decimal exposing (Decimal)
+import Dict exposing (Dict)
+import Eth.Config exposing (CTokenConfig, Config)
+import Eth.Oracle exposing (OracleState)
+import Eth.Token exposing (CToken, TokenState, isCEtherToken)
+import Ether.Contracts.CToken as CTokenContract
+import Ether.Contracts.Comptroller as ComptrollerContract
+import Http
+import Json.Decode exposing (Value, bool, decodeValue, field, int)
+import Utils.Http
+import Debug
+
+
+
+-- APP
+
+
+type alias CTokenBalances =
+    { customerAddress : CustomerAddress
+    , cTokenWalletBalance : Decimal
+    , underlyingAssetAddress : AssetAddress
+    , underlyingBorrowBalance : Decimal
+    , underlyingSupplyBalance : Decimal
+    , underlyingTokenWalletBalance : Decimal
+    , underlyingTokenAllowance : Decimal
+    }
+
+
+type alias CTokenBalancesDict =
+    Dict String CTokenBalances
+
+
+type alias CTokenInterestBalances =
+    { underlyingBorrowInterestPaid : Maybe Decimal
+    , underlyingSupplyInterestEarned : Maybe Decimal
+    }
+
+
+type alias CTokenInterestBalancesDict =
+    Dict String CTokenInterestBalances
+
+
+type alias CTokenMetadata =
+    { exchangeRate : Decimal
+    , borrowRate : Decimal
+    , supplyRate : Decimal
+    , collateralFactor : Decimal
+    , reserveFactor : Decimal
+    , totalBorrows : Decimal
+    , totalUnderlyingCash : Decimal
+    , totalReserves : Decimal
+    , totalSupply : Decimal
+    , totalSupplyUnderlying : Decimal
+    , compSupplySpeedPerBlock : Decimal
+    , compSupplySpeedPerDay : Decimal
+    , compBorrowSpeedPerBlock : Decimal
+    , compBorrowSpeedPerDay : Decimal
+    , borrowCap : Decimal
+    , mintGuardianPaused : Bool
+    }
+
+
+type alias CTokenMetadataDict =
+    Dict String CTokenMetadata
+
+
+type alias GroveState =
+    { balances : CTokenBalancesDict
+    , interestBalances : CTokenInterestBalancesDict
+    , cTokensMetadata : CTokenMetadataDict
+    , maybeCollateralRatio : Maybe Decimal
+    , maybeAccountLiquidityUsd : Maybe Decimal
+    , maybeAccountShortfallUsd : Maybe Decimal
+    , maybeAssetsIn : Maybe (List ContractAddress)
+    , maybeTrxCount : Maybe Int
+    , maybeCloseFactor : Maybe Decimal
+    , maybeLiquidationIncentive : Maybe Decimal
+    , maybeAccountLiquidityEth : Maybe Decimal
+    , maybeAccountShortfallEth : Maybe Decimal
+    , errors : List String
+    }
+
+
+type alias CTokenMetadataUpdate =
+    { cTokenAddress : ContractAddress
+    , exchangeRate : Decimal
+    , supplyRatePerDay : Decimal
+    , borrowRatePerDay : Decimal
+    , collateralFactor : Decimal
+    , reserveFactor : Decimal
+    , totalBorrows : Decimal
+    , totalUnderlyingCash : Decimal
+    , totalReserves : Decimal
+    , totalSupply : Decimal
+    , totalSupplyUnderlying : Decimal
+    , compSupplySpeedPerBlock : Decimal
+    , compSupplySpeedPerDay : Decimal
+    , compBorrowSpeedPerBlock : Decimal
+    , compBorrowSpeedPerDay : Decimal
+    , borrowCap : Decimal
+    , mintGuardianPaused : Bool
+    }
+
+
+type alias CTokenBalanceUpdate =
+    { cTokenAddress : ContractAddress
+    , customerAddress : CustomerAddress
+    , cTokenWalletBalance : Decimal
+    , underlyingAssetAddress : AssetAddress
+    , underlyingBorrowBalance : Decimal
+    , underlyingSupplyBalance : Decimal
+    , underlyingTokenWalletBalance : Decimal
+    , underlyingTokenAllowance : Decimal
+    }
+
+
+type alias AccountLimits =
+    { customerAddress : CustomerAddress
+    , accountLiquidity : Decimal
+    , accountShortfall : Decimal
+    , assetsIn : List ContractAddress
+    , trxCount : Int
+    }
+
+type alias ComptrollerMetadata =
+    { closeFactor : Decimal
+    , liquidationIncentive : Decimal
+    }
+
+
+groveInit : ( GroveState, Cmd GroveMsg )
+groveInit =
+    ( { balances = Dict.empty
+      , interestBalances = Dict.empty
+      , cTokensMetadata = Dict.empty
+      , maybeCollateralRatio = Nothing
+      , maybeAccountLiquidityUsd = Nothing
+      , maybeAccountShortfallUsd = Nothing
+      , maybeAssetsIn = Nothing
+      , maybeTrxCount = Nothing
+      , maybeCloseFactor = Nothing
+      , maybeLiquidationIncentive = Nothing
+      , maybeAccountLiquidityEth = Nothing
+      , maybeAccountShortfallEth = Nothing
+      , errors = []
+      }
+    , Cmd.none
+    )
+
+
+type GroveMsg
+    = SetAllCTokenMetadatas (List CTokenMetadataUpdate)
+    | SetAllCTokenBalances (List CTokenBalanceUpdate)
+    | SetAccountLimits AccountLimits
+    | SetComptrollerMetadata ComptrollerMetadata
+    | PresidioAccountResponse (Result Http.Error AccountResponse)
+    | Web3TransactionMsg GroveTransactionMsg
+    | Error String
+
+
+type GroveTransactionMsg
+    = CTokenBorrow Network ContractAddress Int CustomerAddress Decimal
+    | CTokenMint Network ContractAddress Int CustomerAddress Decimal
+    | CTokenRedeem Network ContractAddress Decimal Int Int CustomerAddress Decimal
+    | CTokenRepayBorrow Network ContractAddress Int CustomerAddress Decimal
+    | EnterMarkets Network ContractAddress (List ContractAddress) CustomerAddress
+    | ExitMarket Network ContractAddress ContractAddress CustomerAddress
+
+
+groveNewBlockCmd : Int -> Dict String String -> Network -> ContractAddress -> Account -> Config -> Cmd GroveMsg
+groveNewBlockCmd blockNumber apiBaseUrlMap network comptroller account config =
+    let
+        cTokenConfigs =
+            Dict.values config.cTokens
+
+        -- We are only going to support networks with COMP
+        comp = 
+            config.maybeCompToken
+            |> Maybe.map .address
+            |> Maybe.withDefault (Contract "0x0000000000000000000000000000000000000000")
+
+        fetchDataCmd =
+            case account of
+                Acct customerAddress _ ->
+                    queryAllWithAccount blockNumber customerAddress cTokenConfigs comp
+
+                UnknownAcct ->
+                    queryAllDataNoAccount blockNumber cTokenConfigs config.comptroller
+
+                NoAccount ->
+                    queryAllDataNoAccount blockNumber cTokenConfigs config.comptroller
+    in
+    fetchDataCmd
+
+
+
+--TODO: We can remove this after we are fully onboard with new price
+
+
+handleAccountLiquidityCalculation : OracleState -> GroveState -> GroveState
+handleAccountLiquidityCalculation oracleState groveState =
+    case oracleState.isPriceFeedOracle of
+        ( Just False, Just etherPrice ) ->
+            let
+                updatedAccountLiquidityUsd =
+                    groveState.maybeAccountLiquidityEth
+                        |> Maybe.map (Decimal.mul etherPrice)
+
+                updatedAccountShortfallUsd =
+                    groveState.maybeAccountShortfallEth
+                        |> Maybe.map (Decimal.mul etherPrice)
+            in
+            { groveState
+                | maybeAccountLiquidityUsd = updatedAccountLiquidityUsd
+                , maybeAccountShortfallUsd = updatedAccountShortfallUsd
+            }
+
+        _ ->
+            groveState
+
+
+groveUpdate : Config -> TokenState -> OracleState -> GroveMsg -> ( GroveState, BNTransactionState ) -> ( ( GroveState, Cmd GroveMsg ), ( BNTransactionState, Cmd msg ) )
+groveUpdate config tokenState oracleState msg ( state, bnState ) =
+    case msg of
+        SetAllCTokenMetadatas cTokenMetadataList ->
+            let
+                pow365 num =
+                    (Decimal.toFloat num ^ 365)
+                        |> Decimal.fromFloat
+                        |> Maybe.withDefault Decimal.zero
+                apyRate ratePerDay =
+                    Decimal.sub (pow365 (Decimal.add Decimal.one ratePerDay)) Decimal.one
+                updatedMetaData =
+                    cTokenMetadataList
+                        |> List.foldl
+                            (\{ cTokenAddress, exchangeRate, supplyRatePerDay, borrowRatePerDay, collateralFactor, reserveFactor, totalBorrows, totalUnderlyingCash, totalReserves, totalSupply, totalSupplyUnderlying, compSupplySpeedPerBlock, compSupplySpeedPerDay, compBorrowSpeedPerBlock, compBorrowSpeedPerDay, borrowCap, mintGuardianPaused } acc ->
+                                Dict.insert (getContractAddressString cTokenAddress)
+                                    { exchangeRate = exchangeRate
+                                    , supplyRate = apyRate supplyRatePerDay
+                                    , borrowRate = apyRate borrowRatePerDay
+                                    , collateralFactor = collateralFactor
+                                    , reserveFactor = reserveFactor
+                                    , totalBorrows = totalBorrows
+                                    , totalUnderlyingCash = totalUnderlyingCash
+                                    , totalReserves = totalReserves
+                                    , totalSupply = totalSupply
+                                    , totalSupplyUnderlying = totalSupplyUnderlying
+                                    , compSupplySpeedPerBlock = compSupplySpeedPerBlock
+                                    , compSupplySpeedPerDay = compSupplySpeedPerDay
+                                    , compBorrowSpeedPerBlock = compBorrowSpeedPerBlock
+                                    , compBorrowSpeedPerDay = compBorrowSpeedPerDay
+                                    , borrowCap = borrowCap
+                                    , mintGuardianPaused = mintGuardianPaused
+                                    }
+                                    acc
+                            )
+                            state.cTokensMetadata
+            in
+            ( ( { state | cTokensMetadata = updatedMetaData }, Cmd.none )
+            , ( bnState, Cmd.none )
+            )
+
+        SetAllCTokenBalances cTokenBalancesList ->
+            let
+                updatedBalances =
+                    cTokenBalancesList
+                        |> List.foldl
+                            (\{ cTokenAddress, customerAddress, cTokenWalletBalance, underlyingAssetAddress, underlyingBorrowBalance, underlyingSupplyBalance, underlyingTokenWalletBalance, underlyingTokenAllowance } acc ->
+                                Dict.insert
+                                    (getContractAddressString cTokenAddress)
+                                    { customerAddress = customerAddress
+                                    , cTokenWalletBalance = cTokenWalletBalance
+                                    , underlyingAssetAddress = underlyingAssetAddress
+                                    , underlyingBorrowBalance = underlyingBorrowBalance
+                                    , underlyingSupplyBalance = underlyingSupplyBalance
+                                    , underlyingTokenWalletBalance = underlyingTokenWalletBalance
+                                    , underlyingTokenAllowance = underlyingTokenAllowance
+                                    }
+                                    acc
+                            )
+                            state.balances
+            in
+            ( ( { state | balances = updatedBalances }, Cmd.none )
+            , ( bnState, Cmd.none )
+            )
+
+        SetAccountLimits { accountLiquidity, accountShortfall, assetsIn, trxCount } ->
+            let
+                ( maybeAccountLiquidityUsd, maybeAccountShortfallUsd ) =
+                    case oracleState.isPriceFeedOracle of
+                        ( Just False, Just etherPrice ) ->
+                            ( Decimal.mul accountLiquidity etherPrice
+                                |> Just
+                            , Decimal.mul accountShortfall etherPrice
+                                |> Just
+                            )
+                        ( Just False, Nothing ) ->
+                            ( Nothing, Nothing )
+                        _ ->
+                            ( Just accountLiquidity, Just accountShortfall )
+                ( maybeAccountLiquidityEth, maybeAccountShortfallEth ) =
+                    case oracleState.isPriceFeedOracle of
+                        ( Just True, _ ) ->
+                            ( Nothing, Nothing )
+                        ( Just False, _ ) ->
+                            ( Just accountLiquidity, Just accountShortfall )
+                        _ ->
+                            ( Just accountLiquidity, Just accountShortfall )
+                updatedState =
+                    { state
+                        | maybeAccountLiquidityUsd = maybeAccountLiquidityUsd
+                        , maybeAccountShortfallUsd = maybeAccountShortfallUsd
+                        , maybeAssetsIn = Just assetsIn
+                        , maybeTrxCount = Just trxCount
+                        , maybeAccountLiquidityEth = maybeAccountLiquidityEth
+                        , maybeAccountShortfallEth = maybeAccountShortfallEth
+                    }
+            in
+            ( ( updatedState, Cmd.none )
+            , ( bnState, Cmd.none )
+            )
+
+        SetComptrollerMetadata { closeFactor, liquidationIncentive } ->
+            let
+                updatedState =
+                    { state
+                        | maybeCloseFactor = Just closeFactor
+                        , maybeLiquidationIncentive = Just liquidationIncentive
+                    }
+            in
+            ( ( updatedState, Cmd.none )
+            , ( bnState, Cmd.none )
+            )
+
+        PresidioAccountResponse result ->
+            case result of
+                Ok accountResponse ->
+                    let
+                        updatedInterestBalances = Dict.empty
+                    in
+                    ( ( { state | interestBalances = updatedInterestBalances }, Cmd.none )
+                    , ( bnState, Cmd.none )
+                    )
+                Err errMsg ->
+                    ( ( state, Console.error ("Error getting account values from Account API, " ++ Utils.Http.showError errMsg) )
+                    , ( bnState, Cmd.none )
+                    )
+
+        Web3TransactionMsg transactionMsg ->
+            ( ( state, Cmd.none )
+            , groveTransactionUpdate config tokenState transactionMsg ( state, bnState )
+            )
+
+        Error error ->
+            ( ( { state | errors = error :: state.errors }, Console.error error )
+            , ( bnState, Cmd.none )
+            )
+
+
+groveTransactionUpdate : Config -> TokenState -> GroveTransactionMsg -> ( GroveState, BNTransactionState ) -> ( BNTransactionState, Cmd msg )
+groveTransactionUpdate config { cTokens } transactionMsg ( state, bnState ) =
+    case transactionMsg of
+        CTokenMint network cTokenAddress underlyingTokenDecimals customerAddress amount ->
+            let
+                maybeUnderlyingAmountWei =
+                    TokenMath.getTokenWei amount underlyingTokenDecimals
+                        |> Decimal.toString
+                        |> BigInt.fromString
+            in
+            case maybeUnderlyingAmountWei of
+                Just underlyingAmountWei ->
+                    CTokenContract.mint config network customerAddress cTokenAddress underlyingAmountWei bnState
+
+                Nothing ->
+                    ( bnState, Console.log "Unable to create underlying wei value for CToken.mint" )
+
+        CTokenRedeem network cTokenAddress exchangeRate cTokenDecimals underlyingTokenDecimals customerAddress underlyingAmount ->
+            if Decimal.eq underlyingAmount Decimal.minusOne then
+                -- If user wants to redeem -1 (aka MAX) then we should redeem their full cToken balance with redeem() instead of redeemUnderlying
+                let
+                    maybeCTokenBalances =
+                        Dict.get (getContractAddressString cTokenAddress) state.balances
+                in
+                case maybeCTokenBalances of
+                    Just cTokenBalances ->
+                        let
+                            maybeCTokenAmountWei =
+                                TokenMath.getTokenWei cTokenBalances.cTokenWalletBalance cTokenDecimals
+                                    |> Decimal.toString
+                                    |> BigInt.fromString
+                        in
+                        case maybeCTokenAmountWei of
+                            Just cTokenAmountWei ->
+                                CTokenContract.redeem config network customerAddress cTokenAddress cTokenAmountWei bnState
+
+                            Nothing ->
+                                ( bnState, Console.log "Unable to create ctoken balance wei value for CToken.redeem" )
+
+                    Nothing ->
+                        ( bnState, Console.log "Attempted to redeem on a CToken with no balance." )
+
+            else
+                let
+                    maybeUnderlyingAmountWei =
+                        TokenMath.getTokenWei underlyingAmount underlyingTokenDecimals
+                            |> Decimal.toString
+                            |> BigInt.fromString
+                in
+                case maybeUnderlyingAmountWei of
+                    Just underlyingAmountWei ->
+                        CTokenContract.redeemUnderlying config network customerAddress cTokenAddress underlyingAmountWei bnState
+
+                    Nothing ->
+                        ( bnState, Console.log "Unable to create underlying wei value for CToken.redeemUnderlying" )
+
+        CTokenBorrow network cTokenAddress underlyingTokenDecimals customerAddress amount ->
+            let
+                maybeUnderlyingAmountWei =
+                    TokenMath.getTokenWei amount underlyingTokenDecimals
+                        |> Decimal.toString
+                        |> BigInt.fromString
+            in
+            case maybeUnderlyingAmountWei of
+                Just underlyingAmountWei ->
+                    CTokenContract.borrow config network customerAddress cTokenAddress underlyingAmountWei bnState
+
+                Nothing ->
+                    ( bnState, Console.log "Unable to create underlying wei value for CToken.borrow" )
+
+        CTokenRepayBorrow network cTokenAddress underlyingTokenDecimals customerAddress underlyingAmount ->
+            if cTokenAddress == config.cEtherToken.address then
+                let
+                    cEtherRepayAmount =
+                        if Decimal.eq underlyingAmount Decimal.minusOne then
+                            let
+                                borrowBalance =
+                                    state.balances
+                                        |> Dict.get (getContractAddressString cTokenAddress)
+                                        |> Maybe.map .underlyingBorrowBalance
+                                        |> Maybe.withDefault Decimal.zero
+
+                                tinyAdjustment =
+                                    Decimal.fromString "0.0035"
+                                        |> Maybe.withDefault Decimal.zero
+                                        |> Decimal.mul borrowBalance
+
+                                -- We'll pass in max as BorrowBalance + BorrowBalance * (0.0035)
+                                adjustedAmount =
+                                    Decimal.add borrowBalance tinyAdjustment
+                            in
+                            adjustedAmount
+
+                        else
+                            underlyingAmount
+
+                    maybeRepayUnderlyingAmountWei =
+                        TokenMath.getTokenWei cEtherRepayAmount underlyingTokenDecimals
+                            |> Decimal.toString
+                            |> BigInt.fromString
+                in
+                case maybeRepayUnderlyingAmountWei of
+                    Just repayUnderlyingAmountWei ->
+                        CTokenContract.repayBorrow config network customerAddress cTokenAddress repayUnderlyingAmountWei bnState
+
+                    Nothing ->
+                        ( bnState, Console.log "Unable to create underlying wei value for CToken.repayBorrow" )
+
+            else
+                let
+                    maybeUnderlyingAmountWei =
+                        if Decimal.eq underlyingAmount Decimal.minusOne then
+                            EtherHelpers.negativeOne
+                                |> Just
+
+                        else
+                            TokenMath.getTokenWei underlyingAmount underlyingTokenDecimals
+                                |> Decimal.toString
+                                |> BigInt.fromString
+                in
+                case maybeUnderlyingAmountWei of
+                    Just underlyingAmountWei ->
+                        CTokenContract.repayBorrow config network customerAddress cTokenAddress underlyingAmountWei bnState
+
+                    Nothing ->
+                        ( bnState, Console.log "Unable to create underlying wei value for CToken.repayBorrow" )
+
+        EnterMarkets network comptrollerAddress cTokenAddressList customerAddress ->
+            ComptrollerContract.enterMarkets config network customerAddress comptrollerAddress cTokenAddressList bnState
+
+        ExitMarket network comptrollerAddress cTokenAddress customerAddress ->
+            ComptrollerContract.exitMarket config network customerAddress comptrollerAddress cTokenAddress bnState
+
+
+groveSubscriptions : Sub GroveMsg
+groveSubscriptions =
+    Sub.batch
+        [ giveCTokenMetadata (handleError (Json.Decode.errorToString >> Error) SetAllCTokenMetadatas)
+        , giveCTokenBalancesAllUpdate (handleError (Json.Decode.errorToString >> Error) SetAllCTokenBalances)
+        , giveAccountLimits (handleError (Json.Decode.errorToString >> Error) SetAccountLimits)
+        , giveComptrollerMetadata (handleError (Json.Decode.errorToString >> Error) SetComptrollerMetadata)
+        ]
+
+
+clearGroveState : GroveState -> GroveState
+clearGroveState state =
+    { state
+        | balances = Dict.empty
+        , interestBalances = Dict.empty
+        , maybeAccountLiquidityUsd = Nothing
+        , maybeAccountShortfallUsd = Nothing
+        , maybeAssetsIn = Nothing
+        , maybeTrxCount = Nothing
+        , maybeCloseFactor = Nothing
+        , maybeLiquidationIncentive = Nothing
+        , maybeAccountLiquidityEth = Nothing
+        , maybeAccountShortfallEth = Nothing
+    }
+
+
+
+-- Helpers
+
+
+cTokenIsLoaded : Config -> CToken -> GroveState -> Bool
+cTokenIsLoaded config cToken groveState =
+    let
+        hasUnderlyingTokenAllowance =
+            Dict.member (getContractAddressString cToken.contractAddress) groveState.balances
+    in
+    if isCEtherToken config cToken then
+        True
+
+    else
+        hasUnderlyingTokenAllowance
+
+
+cTokenIsApproved : Config -> CToken -> GroveState -> Bool
+cTokenIsApproved config cToken groveState =
+    let
+        ( tokenAllowance, tokenBalance ) =
+            Dict.get (getContractAddressString cToken.contractAddress) groveState.balances
+                |> Maybe.map
+                    (\{ underlyingTokenAllowance, underlyingTokenWalletBalance } ->
+                        ( underlyingTokenAllowance, underlyingTokenWalletBalance )
+                    )
+                |> Maybe.withDefault ( Decimal.zero, Decimal.zero )
+    in
+    if isCEtherToken config cToken || Decimal.lt tokenAllowance Decimal.zero then
+        True
+
+    else
+        Decimal.gt tokenAllowance Decimal.zero
+
+
+-- Get CToken metadata: exchange rate, borrow rate, collateral factor
+
+
+port queryAllNoAccountPort : { blockNumber : Int, cTokens : List ( String, CTokenPortData ), comptroller : String } -> Cmd msg
+
+
+queryAllDataNoAccount : Int -> List CTokenConfig -> ContractAddress -> Cmd msg
+queryAllDataNoAccount blockNumber cTokenConfigs (Contract comptroller) =
+    let
+        cTokens =
+            cTokenConfigs
+                |> List.map
+                    (\cTokenConfig ->
+                        ( getContractAddressString cTokenConfig.address
+                        , { underlyingAssetAddress = getContractAddressString cTokenConfig.underlying.address
+                          , underlyingDecimals = cTokenConfig.underlying.decimals
+                          , cTokenDecimals = cTokenConfig.decimals
+                          , cTokenSymbol = cTokenConfig.symbol
+                          }
+                        )
+                    )
+    in
+    queryAllNoAccountPort
+        { blockNumber = blockNumber
+        , cTokens = cTokens
+        , comptroller = comptroller
+        }
+
+
+port giveCTokenMetadataPort : (Value -> msg) -> Sub msg
+
+
+giveCTokenMetadata : (Result Json.Decode.Error (List CTokenMetadataUpdate) -> msg) -> Sub msg
+giveCTokenMetadata wrapper =
+    let
+        stage1 =
+            Json.Decode.map8 CTokenMetadataUpdate
+                (field "cTokenAddress" decodeContractAddress)
+                (field "exchangeRate" decimal)
+                (field "supplyRatePerDay" decimal)
+                (field "borrowRatePerDay" decimal)
+                (field "collateralFactor" decimal)
+                (field "reserveFactor" decimal)
+                (field "totalBorrows" decimal)
+                (field "totalUnderlyingCash" decimal)
+
+        stage2 =
+            Json.Decode.map6
+                (<|)
+                stage1
+                (field "totalReserves" decimal)
+                (field "totalSupply" decimal)
+                (field "totalSupplyUnderlying" decimal)
+                (field "compSupplySpeedPerBlock" decimal)
+                (field "compSupplySpeedPerDay" decimal)
+
+        decoder =
+            Json.Decode.list
+                (Json.Decode.map5
+                    (<|)
+                    stage2
+                    (field "compBorrowSpeedPerBlock" decimal)
+                    (field "compBorrowSpeedPerDay" decimal)
+                    (field "borrowCap" decimal)
+                    (field "mintGuardianPaused" bool)
+                )
+
+        -- wrap the raw Value so we can log it before decoding
+        rawWrapper : Value -> msg
+        rawWrapper value =
+            let
+                result = decodeValue decoder value
+            in
+            wrapper result
+    in
+    giveCTokenMetadataPort rawWrapper
+
+
+
+-- Get customer balance
+
+
+type alias CTokenPortData =
+    { underlyingAssetAddress : String
+    , underlyingDecimals : Int
+    , cTokenDecimals : Int
+    , cTokenSymbol : String
+    }
+
+
+port queryAllWithAccountPort : { blockNumber : Int, customerAddress : String, cTokens : List ( String, CTokenPortData ), compAddress: String } -> Cmd msg
+
+
+cTokenConfigToPort : CTokenConfig -> ( String, CTokenPortData )
+cTokenConfigToPort cTokenConfig =
+    ( getContractAddressString cTokenConfig.address
+    , { underlyingAssetAddress = getContractAddressString cTokenConfig.underlying.address
+      , underlyingDecimals = cTokenConfig.underlying.decimals
+      , cTokenDecimals = cTokenConfig.decimals
+      , cTokenSymbol = cTokenConfig.symbol
+      }
+    )
+
+
+queryAllWithAccount : Int -> CustomerAddress -> List CTokenConfig -> ContractAddress -> Cmd msg
+queryAllWithAccount blockNumber (Customer customer) cTokenConfigs (Contract comp) =
+    queryAllWithAccountPort
+        { blockNumber = blockNumber
+        , customerAddress = customer
+        , cTokens = List.map cTokenConfigToPort cTokenConfigs
+        , compAddress = comp
+        }
+
+
+port giveCTokenBalancesAllPort : (Value -> msg) -> Sub msg
+
+
+giveCTokenBalancesAllUpdate : (Result Json.Decode.Error (List CTokenBalanceUpdate) -> msg) -> Sub msg
+giveCTokenBalancesAllUpdate wrapper =
+    let
+        decoder =
+            Json.Decode.list
+                (Json.Decode.map8 CTokenBalanceUpdate
+                    (field "cTokenAddress" decodeContractAddress)
+                    (field "customerAddress" decodeCustomerAddress)
+                    (field "cTokenWalletBalance" decimal)
+                    (field "underlyingAssetAddress" decodeAssetAddress)
+                    (field "underlyingBorrowBalance" decimal)
+                    (field "underlyingSupplyBalance" decimal)
+                    (field "underlyingTokenWalletBalance" decimal)
+                    (field "underlyingTokenAllowance" decimal)
+                )
+    in
+    giveCTokenBalancesAllPort
+        (decodeValue decoder >> wrapper)
+
+
+
+-- Get all accounts limits for the user: liquidity, shortfall, assetsIn, and currentTransactionCount
+
+
+port giveAccountLimitsPort : (Value -> msg) -> Sub msg
+
+
+giveAccountLimits : (Result Json.Decode.Error AccountLimits -> msg) -> Sub msg
+giveAccountLimits wrapper =
+    let
+        decoder =
+            Json.Decode.map5 AccountLimits
+                (field "customerAddress" decodeCustomerAddress)
+                (field "accountLiquidity" decimal)
+                (field "accountShortfall" decimal)
+                (field "assetsIn" (Json.Decode.list decodeContractAddress))
+                (field "trxCount" int)
+    in
+    giveAccountLimitsPort
+        (decodeValue decoder >> wrapper)
+
+
+port giveComptrollerMetadataPort : (Value -> msg) -> Sub msg
+
+
+giveComptrollerMetadata : (Result Json.Decode.Error ComptrollerMetadata -> msg) -> Sub msg
+giveComptrollerMetadata wrapper =
+    let
+        decoder =
+            Json.Decode.map2 ComptrollerMetadata
+                (field "closeFactor" decimal)
+                (field "liquidationIncentive" decimal)
+                
+        -- wrap the raw Value so we can log it before decoding
+        rawWrapper : Value -> msg
+        rawWrapper value =
+            let
+                _ = Debug.log "[Grove] Received Comptroller metadata:" value
+                result = decodeValue decoder value
+                _ = Debug.log "[Grove] Decoded Comptroller metadata:" result
+            in
+            wrapper result
+    in
+    giveComptrollerMetadataPort rawWrapper

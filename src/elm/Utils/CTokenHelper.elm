@@ -3,8 +3,9 @@ module Utils.CTokenHelper exposing (CTokenType(..), getAllSupportedCTokens)
 import Balances
 import Decimal
 import Dict
-import Eth.Compound exposing (CompoundState)
+import Eth.Grove exposing (GroveState)
 import Eth.Token exposing (CToken, TokenState)
+import Debug
 
 
 type CTokenType
@@ -12,20 +13,20 @@ type CTokenType
     | ForBorrow
 
 
-getAllSupportedCTokens : CompoundState -> TokenState -> CTokenType -> List CToken
-getAllSupportedCTokens compoundState tokenState cTokenType =
+getAllSupportedCTokens : GroveState -> TokenState -> CTokenType -> List CToken
+getAllSupportedCTokens groveState tokenState cTokenType =
     tokenState.cTokens
         |> Dict.values
         |> List.filterMap
             (\cToken ->
                 let
                     mintPaused =
-                        Balances.getMintGuardianPaused compoundState.cTokensMetadata cToken.contractAddress && cTokenType == ForCollateral
+                        Balances.getMintGuardianPaused groveState.cTokensMetadata cToken.contractAddress && cTokenType == ForCollateral
                 in
-                if cToken.symbol == "cSAI" || cToken.symbol == "cREP" || cToken.symbol == "cWBTC" || cToken.symbol == "cFEI" || mintPaused then
+                if mintPaused then
                     let
                         underlyingBalances =
-                            Balances.getUnderlyingBalances compoundState cToken.contractAddress
+                            Balances.getUnderlyingBalances groveState cToken.contractAddress
 
                         ( supplyBalance, borrowBalance ) =
                             ( underlyingBalances
@@ -38,10 +39,8 @@ getAllSupportedCTokens compoundState tokenState cTokenType =
                     in
                     if Decimal.eq supplyBalance Decimal.zero && Decimal.eq borrowBalance Decimal.zero then
                         Nothing
-
                     else
                         Just cToken
-
                 else
                     Just cToken
             )

@@ -3,16 +3,16 @@ module Ether.Contracts.Comptroller exposing
     , exitMarket
     )
 
-import CompoundComponents.Console as Console
-import CompoundComponents.Eth.Ethereum as Ethereum exposing (ContractAddress(..), CustomerAddress(..))
-import CompoundComponents.Eth.Network exposing (Network(..))
-import CompoundComponents.Ether.Address
-import CompoundComponents.Ether.BNTransaction as BNTransaction exposing (BNTransactionState)
-import CompoundComponents.Ether.FromEthereumUtils as FromEthereumUtils
-import CompoundComponents.Ether.FunctionSpec as FunctionSpec
-import CompoundComponents.Ether.Spec as Spec
-import CompoundComponents.Ether.Value as Value
-import CompoundComponents.Ether.Web3 as EtherWeb3
+import GroveComponents.Console as Console
+import GroveComponents.Eth.Ethereum as Ethereum exposing (ContractAddress(..), CustomerAddress(..))
+import GroveComponents.Eth.Network exposing (Network(..))
+import GroveComponents.Ether.Address
+import GroveComponents.Ether.BNTransaction as BNTransaction exposing (BNTransactionState)
+import GroveComponents.Ether.FromEthereumUtils as FromEthereumUtils
+import GroveComponents.Ether.FunctionSpec as FunctionSpec
+import GroveComponents.Ether.Spec as Spec
+import GroveComponents.Ether.Value as Value
+import GroveComponents.Ether.Web3 as EtherWeb3
 import Eth.Config exposing (Config)
 
 
@@ -52,7 +52,7 @@ enterMarkets config network customerAddress comptrollerAddress cTokenAddressList
                     let
                         addresses =
                             cTokenListAsEtherAddresses
-                                |> List.map CompoundComponents.Ether.Address.toString
+                                |> List.map GroveComponents.Ether.Address.toString
 
                         bnTransaction =
                             BNTransaction.newTransaction network fromAddress toAddress "enterMarkets" addresses bnState

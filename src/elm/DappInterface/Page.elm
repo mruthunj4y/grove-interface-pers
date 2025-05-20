@@ -97,8 +97,5 @@ getPage location =
         Just [ "terms" ] ->
             TermsOfService
 
-        Just [ "vote" ] ->
-            Vote
-
         _ ->
             Home

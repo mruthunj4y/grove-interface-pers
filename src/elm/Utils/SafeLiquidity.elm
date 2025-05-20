@@ -12,11 +12,11 @@ module Utils.SafeLiquidity exposing
     )
 
 import Balances
-import CompoundComponents.Eth.Ethereum as Ethereum
-import CompoundComponents.Functions as Functions
+import GroveComponents.Eth.Ethereum as Ethereum
+import GroveComponents.Functions as Functions
 import Decimal exposing (Decimal)
 import Dict exposing (Dict)
-import Eth.Compound exposing (CompoundMsg, CompoundState)
+import Eth.Grove exposing (GroveMsg, GroveState)
 import Eth.Config exposing (Config)
 import Eth.Oracle exposing (OracleState)
 import Eth.Token exposing (CToken, Token, TokenState)
@@ -40,23 +40,23 @@ type UserLiquidityStatus
     | AtRisk
 
 
-getUserCollateralBorrowedRate : Eth.Compound.CompoundState -> List CToken -> Eth.Oracle.OracleState -> Maybe Decimal
-getUserCollateralBorrowedRate compoundState cTokens oracleState =
+getUserCollateralBorrowedRate : Eth.Grove.GroveState -> List CToken -> Eth.Oracle.OracleState -> Maybe Decimal
+getUserCollateralBorrowedRate groveState cTokens oracleState =
     let
         balanceTotalsUsd =
-            Balances.getUnderlyingTotalsInUsd compoundState cTokens oracleState
+            Balances.getUnderlyingTotalsInUsd groveState cTokens oracleState
 
         collateralValueUsd =
-            Balances.getCollateralValueInUsd compoundState cTokens oracleState
+            Balances.getCollateralValueInUsd groveState cTokens oracleState
     in
     Decimal.fastdiv balanceTotalsUsd.totalBorrow collateralValueUsd
 
 
-getUserCollateralizationStatus : Eth.Compound.CompoundState -> List CToken -> Eth.Oracle.OracleState -> Maybe UserLiquidityStatus
-getUserCollateralizationStatus compoundState cTokens oracleState =
+getUserCollateralizationStatus : Eth.Grove.GroveState -> List CToken -> Eth.Oracle.OracleState -> Maybe UserLiquidityStatus
+getUserCollateralizationStatus groveState cTokens oracleState =
     let
         balanceTotalsUsd =
-            Balances.getUnderlyingTotalsInUsd compoundState cTokens oracleState
+            Balances.getUnderlyingTotalsInUsd groveState cTokens oracleState
 
         atRiskDecimalPercent =
             Decimal.fromString "0.9"
@@ -70,7 +70,7 @@ getUserCollateralizationStatus compoundState cTokens oracleState =
         Just Safe
 
     else
-        case getUserCollateralBorrowedRate compoundState cTokens oracleState of
+        case getUserCollateralBorrowedRate groveState cTokens oracleState of
             Just collateralBorredRate ->
                 if Decimal.gt collateralBorredRate atRiskDecimalPercent then
                     Just AtRisk
@@ -89,9 +89,9 @@ getUserCollateralizationStatus compoundState cTokens oracleState =
 -- Maximum borrow allowed by the user is just their account liquidity
 
 
-getAbsoluteMaxBorrowInUsd : CompoundState -> OracleState -> Decimal
-getAbsoluteMaxBorrowInUsd compoundState oracleState =
-    case compoundState.maybeAccountLiquidityUsd of
+getAbsoluteMaxBorrowInUsd : GroveState -> OracleState -> Decimal
+getAbsoluteMaxBorrowInUsd groveState oracleState =
+    case groveState.maybeAccountLiquidityUsd of
         Just accountLiquidityUsd ->
             accountLiquidityUsd
 
@@ -99,11 +99,11 @@ getAbsoluteMaxBorrowInUsd compoundState oracleState =
             Decimal.zero
 
 
-getAbsoluteMaxBorrowForToken : CompoundState -> OracleState -> Token -> Decimal
-getAbsoluteMaxBorrowForToken compoundState oracleState token =
+getAbsoluteMaxBorrowForToken : GroveState -> OracleState -> Token -> Decimal
+getAbsoluteMaxBorrowForToken groveState oracleState token =
     let
         absoluteMaxBorrowUsd =
-            getAbsoluteMaxBorrowInUsd compoundState oracleState
+            getAbsoluteMaxBorrowInUsd groveState oracleState
     in
     calculateMaxBorrowForToken absoluteMaxBorrowUsd oracleState token
 
@@ -116,14 +116,14 @@ getAbsoluteMaxBorrowForToken compoundState oracleState token =
 -- 2. accountLiquidity - (CollateralValue * (1-0.8))
 
 
-getSafeMaxBorrowInUsd : CompoundState -> TokenState -> OracleState -> Decimal
-getSafeMaxBorrowInUsd compoundState tokenState oracleState =
+getSafeMaxBorrowInUsd : GroveState -> TokenState -> OracleState -> Decimal
+getSafeMaxBorrowInUsd groveState tokenState oracleState =
     let
         cTokens =
             Dict.values tokenState.cTokens
 
         collateralValueUsd =
-            Balances.getCollateralValueInUsd compoundState cTokens oracleState
+            Balances.getCollateralValueInUsd groveState cTokens oracleState
 
         safeMinLiquidityPercent =
             Decimal.sub Decimal.one safeMaxCollateralValueBorrowPercentage
@@ -133,17 +133,17 @@ getSafeMaxBorrowInUsd compoundState tokenState oracleState =
 
         maxLiquidityCanBorrow =
             Decimal.sub
-                (getAbsoluteMaxBorrowInUsd compoundState oracleState)
+                (getAbsoluteMaxBorrowInUsd groveState oracleState)
                 safeMinLiquidityUsd
     in
     Functions.decimalMax maxLiquidityCanBorrow Decimal.zero
 
 
-getSafeMaxBorrowForToken : CompoundState -> TokenState -> OracleState -> Token -> Decimal
-getSafeMaxBorrowForToken compoundState tokenState oracleState token =
+getSafeMaxBorrowForToken : GroveState -> TokenState -> OracleState -> Token -> Decimal
+getSafeMaxBorrowForToken groveState tokenState oracleState token =
     let
         maxSafeBorrowUsd =
-            getSafeMaxBorrowInUsd compoundState tokenState oracleState
+            getSafeMaxBorrowInUsd groveState tokenState oracleState
     in
     calculateMaxBorrowForToken maxSafeBorrowUsd oracleState token
 
@@ -159,9 +159,9 @@ calculateMaxBorrowForToken maxBorrowInUsd oracleState token =
             Decimal.zero
 
 
-getAbsoluteMaxWithdrawForToken : Config -> CompoundState -> TokenState -> OracleState -> CToken -> Decimal -> Decimal
-getAbsoluteMaxWithdrawForToken config compoundState tokenState oracleState cToken tokenSupplyBalance =
-    calculateMaxWithdrawWithSafeFactor Decimal.one config compoundState tokenState oracleState cToken tokenSupplyBalance
+getAbsoluteMaxWithdrawForToken : Config -> GroveState -> TokenState -> OracleState -> CToken -> Decimal -> Decimal
+getAbsoluteMaxWithdrawForToken config groveState tokenState oracleState cToken tokenSupplyBalance =
+    calculateMaxWithdrawWithSafeFactor Decimal.one config groveState tokenState oracleState cToken tokenSupplyBalance
 
 
 
@@ -173,37 +173,37 @@ getAbsoluteMaxWithdrawForToken config compoundState tokenState oracleState cToke
 -- percentage of underlying that a user can withdraw to keep at 1.25.
 
 
-getSafeMaxWithdrawForToken : Config -> CompoundState -> TokenState -> OracleState -> CToken -> Decimal -> Decimal
-getSafeMaxWithdrawForToken config compoundState tokenState oracleState cToken tokenSupplyBalance =
-    calculateMaxWithdrawWithSafeFactor safeMaxCollateralValueWithdrawPercentage config compoundState tokenState oracleState cToken tokenSupplyBalance
+getSafeMaxWithdrawForToken : Config -> GroveState -> TokenState -> OracleState -> CToken -> Decimal -> Decimal
+getSafeMaxWithdrawForToken config groveState tokenState oracleState cToken tokenSupplyBalance =
+    calculateMaxWithdrawWithSafeFactor safeMaxCollateralValueWithdrawPercentage config groveState tokenState oracleState cToken tokenSupplyBalance
 
 
-calculateMaxWithdrawWithSafeFactor : Decimal -> Config -> CompoundState -> TokenState -> OracleState -> CToken -> Decimal -> Decimal
-calculateMaxWithdrawWithSafeFactor collateralValuePercentage config compoundState tokenState oracleState cToken tokenSupplyBalance =
+calculateMaxWithdrawWithSafeFactor : Decimal -> Config -> GroveState -> TokenState -> OracleState -> CToken -> Decimal -> Decimal
+calculateMaxWithdrawWithSafeFactor collateralValuePercentage config groveState tokenState oracleState cToken tokenSupplyBalance =
     let
         allCTokensList =
             tokenState.cTokens
                 |> Dict.values
 
         balanceTotalsUsd =
-            Balances.getUnderlyingTotalsInUsd compoundState allCTokensList oracleState
+            Balances.getUnderlyingTotalsInUsd groveState allCTokensList oracleState
 
         maybeCTokenMetadata =
-            compoundState.cTokensMetadata
+            groveState.cTokensMetadata
                 |> Dict.get (Ethereum.getContractAddressString cToken.contractAddress)
 
         maybeTokenPriceUsd =
             Eth.Oracle.getOraclePrice oracleState cToken.underlying
     in
-    if Decimal.eq balanceTotalsUsd.totalBorrow Decimal.zero || not (Balances.hasEnteredAsset config compoundState cToken) then
+    if Decimal.eq balanceTotalsUsd.totalBorrow Decimal.zero || not (Balances.hasEnteredAsset config groveState cToken) then
         tokenSupplyBalance
 
     else
-        case ( compoundState.maybeAccountLiquidityUsd, maybeCTokenMetadata, maybeTokenPriceUsd ) of
+        case ( groveState.maybeAccountLiquidityUsd, maybeCTokenMetadata, maybeTokenPriceUsd ) of
             ( Just maybeAccountLiquidityUsd, Just cTokenMetadata, Just tokenPriceUsd ) ->
                 let
                     accountTotalCollateralUsd =
-                        Balances.getCollateralValueInUsd compoundState allCTokensList oracleState
+                        Balances.getCollateralValueInUsd groveState allCTokensList oracleState
 
                     safeTotalCollateralUsd =
                         Decimal.mul balanceTotalsUsd.totalBorrow collateralValuePercentage
@@ -212,7 +212,7 @@ calculateMaxWithdrawWithSafeFactor collateralValuePercentage config compoundStat
                         Decimal.sub accountTotalCollateralUsd safeTotalCollateralUsd
 
                     tokenUnderlyingBalances =
-                        Balances.getUnderlyingTotalsInUsd compoundState [ cToken ] oracleState
+                        Balances.getUnderlyingTotalsInUsd groveState [ cToken ] oracleState
 
                     tokenCollateralValueUsd =
                         tokenUnderlyingBalances.totalSupply
@@ -237,17 +237,17 @@ calculateMaxWithdrawWithSafeFactor collateralValuePercentage config compoundStat
                 Decimal.zero
 
 
-getCurrentBorrowLimitUsd : CompoundState -> TokenState -> OracleState -> Decimal
-getCurrentBorrowLimitUsd compoundState tokenState oracleState =
+getCurrentBorrowLimitUsd : GroveState -> TokenState -> OracleState -> Decimal
+getCurrentBorrowLimitUsd groveState tokenState oracleState =
     let
         cTokens =
             Dict.values tokenState.cTokens
 
         balanceTotalsUsd =
-            Balances.getUnderlyingTotalsInUsd compoundState cTokens oracleState
+            Balances.getUnderlyingTotalsInUsd groveState cTokens oracleState
 
         accountLiquidityUsd =
-            compoundState.maybeAccountLiquidityUsd
+            groveState.maybeAccountLiquidityUsd
                 |> Maybe.withDefault Decimal.zero
 
         --Total Borrow Limit is AccountLiquidity + TotalBorrowBalance

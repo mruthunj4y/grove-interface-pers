@@ -120,7 +120,7 @@ function build(previousFileSizes) {
 }
 
 function copyPublicFolder() {
-  fs.copySync(paths.componentsPath, path.join(paths.appBuild, 'compound-components'), {
+  fs.copySync(paths.componentsPath, path.join(paths.appBuild, 'grove-components'), {
     dereference: true,
     filter: (file) => file !== paths.appHtml,
   });

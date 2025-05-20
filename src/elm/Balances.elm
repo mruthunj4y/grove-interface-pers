@@ -12,25 +12,25 @@ module Balances exposing
     , hasEnteredAsset
     )
 
-import CompoundComponents.Eth.Ethereum as Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), getContractAddressString)
-import CompoundComponents.Functions as Functions
 import Decimal exposing (Decimal)
-import Dict 
-import Eth.Compound exposing (CTokenBalances, CTokenInterestBalances, CTokenMetadataDict, CompoundState)
+import Dict
 import Eth.Config exposing (Config)
+import Eth.Grove exposing (CTokenBalances, CTokenInterestBalances, CTokenMetadataDict, GroveState)
 import Eth.Oracle exposing (OracleState)
 import Eth.Token exposing (CToken)
+import GroveComponents.Eth.Ethereum as Ethereum exposing (Account(..), AssetAddress(..), ContractAddress(..), CustomerAddress(..), getContractAddressString)
+import GroveComponents.Functions as Functions
 
 
-getUnderlyingBalances : CompoundState -> ContractAddress -> Maybe CTokenBalances
-getUnderlyingBalances compoundState (Contract cTokenAddress) =
-    compoundState.balances
+getUnderlyingBalances : GroveState -> ContractAddress -> Maybe CTokenBalances
+getUnderlyingBalances groveState (Contract cTokenAddress) =
+    groveState.balances
         |> Dict.get cTokenAddress
 
 
-getUnderlyingInterestBalances : CompoundState -> ContractAddress -> Maybe CTokenInterestBalances
-getUnderlyingInterestBalances compoundState (Contract cTokenAddress) =
-    compoundState.interestBalances
+getUnderlyingInterestBalances : GroveState -> ContractAddress -> Maybe CTokenInterestBalances
+getUnderlyingInterestBalances groveState (Contract cTokenAddress) =
+    groveState.interestBalances
         |> Dict.get cTokenAddress
 
 
@@ -42,14 +42,14 @@ type alias UnderlyingBalancesInUsd =
     }
 
 
-getUnderlyingBalancesInUsd : CompoundState -> CToken -> OracleState -> Maybe UnderlyingBalancesInUsd
-getUnderlyingBalancesInUsd compoundState cToken oracleState =
+getUnderlyingBalancesInUsd : GroveState -> CToken -> OracleState -> Maybe UnderlyingBalancesInUsd
+getUnderlyingBalancesInUsd groveState cToken oracleState =
     Functions.map2 (Eth.Oracle.getOraclePrice oracleState cToken.underlying)
-        (getUnderlyingBalances compoundState cToken.contractAddress)
+        (getUnderlyingBalances groveState cToken.contractAddress)
         (\priceInUsd underlyingBalances ->
             let
                 maybeInterestBalances =
-                    compoundState.interestBalances
+                    groveState.interestBalances
                         |> Dict.get (Ethereum.getContractAddressString cToken.contractAddress)
 
                 ( actualBorrowInterest, actualSupplyInterest ) =
@@ -100,8 +100,8 @@ type alias UnderlyingBalanceTotals =
     }
 
 
-getUnderlyingTotalsInUsd : CompoundState -> List CToken -> OracleState -> UnderlyingBalanceTotals
-getUnderlyingTotalsInUsd compoundState cTokens oracleState =
+getUnderlyingTotalsInUsd : GroveState -> List CToken -> OracleState -> UnderlyingBalanceTotals
+getUnderlyingTotalsInUsd groveState cTokens oracleState =
     let
         emptyTotals =
             { totalBorrow = Decimal.zero
@@ -114,7 +114,7 @@ getUnderlyingTotalsInUsd compoundState cTokens oracleState =
         (\cToken runningBalanceTotals ->
             let
                 maybeUnderlyingBalancesUsd =
-                    getUnderlyingBalancesInUsd compoundState cToken oracleState
+                    getUnderlyingBalancesInUsd groveState cToken oracleState
             in
             case maybeUnderlyingBalancesUsd of
                 Just underlyingBalancesUsd ->
@@ -131,19 +131,19 @@ getUnderlyingTotalsInUsd compoundState cTokens oracleState =
         cTokens
 
 
-getWalletBalanceNonSafeEther : Config -> Account -> CompoundState -> CToken -> Maybe Decimal
-getWalletBalanceNonSafeEther config account compoundState cToken =
+getWalletBalanceNonSafeEther : Config -> Account -> GroveState -> CToken -> Maybe Decimal
+getWalletBalanceNonSafeEther config account groveState cToken =
     case ( Eth.Token.isCEtherToken config cToken, account ) of
         ( True, Acct customerAddress etherBalance ) ->
             etherBalance
 
         _ ->
-            Dict.get (getContractAddressString cToken.contractAddress) compoundState.balances
+            Dict.get (getContractAddressString cToken.contractAddress) groveState.balances
                 |> Maybe.map .underlyingTokenWalletBalance
 
 
-getWalletBalanceSafeEther : Config -> Account -> CompoundState -> CToken -> Maybe Decimal
-getWalletBalanceSafeEther config account compoundState cToken =
+getWalletBalanceSafeEther : Config -> Account -> GroveState -> CToken -> Maybe Decimal
+getWalletBalanceSafeEther config account groveState cToken =
     case ( Eth.Token.isCEtherToken config cToken, account ) of
         ( True, Acct customerAddress etherBalance ) ->
             case ( Decimal.fromFloat 0.005, etherBalance ) of
@@ -156,22 +156,22 @@ getWalletBalanceSafeEther config account compoundState cToken =
                     etherBalance
 
         _ ->
-            Dict.get (getContractAddressString cToken.contractAddress) compoundState.balances
+            Dict.get (getContractAddressString cToken.contractAddress) groveState.balances
                 |> Maybe.map .underlyingTokenWalletBalance
 
 
-getCollateralValueInUsd : Eth.Compound.CompoundState -> List CToken -> Eth.Oracle.OracleState -> Decimal
-getCollateralValueInUsd compoundState cTokens oracleState =
+getCollateralValueInUsd : Eth.Grove.GroveState -> List CToken -> Eth.Oracle.OracleState -> Decimal
+getCollateralValueInUsd groveState cTokens oracleState =
     let
         balanceTotalsUsd =
-            getUnderlyingTotalsInUsd compoundState cTokens oracleState
+            getUnderlyingTotalsInUsd groveState cTokens oracleState
 
         accountLiquidityUsd =
-            compoundState.maybeAccountLiquidityUsd
+            groveState.maybeAccountLiquidityUsd
                 |> Maybe.withDefault Decimal.zero
 
         accountShortfallUsd =
-            compoundState.maybeAccountShortfallUsd
+            groveState.maybeAccountShortfallUsd
                 |> Maybe.withDefault Decimal.zero
 
         -- Actual account liquidity is the summation of both accountLiquidity and accountShortfall
@@ -182,22 +182,23 @@ getCollateralValueInUsd compoundState cTokens oracleState =
     Decimal.add actualAccountLiquidityUsd balanceTotalsUsd.totalBorrow
 
 
-hasEnteredAsset : Config -> CompoundState -> CToken -> Bool
-hasEnteredAsset config compoundState cToken =
-    getAssetsNotYetEntered config compoundState
+hasEnteredAsset : Config -> GroveState -> CToken -> Bool
+hasEnteredAsset config groveState cToken =
+    getAssetsNotYetEntered config groveState
         |> Maybe.withDefault []
         |> List.member cToken.contractAddress
         |> not
 
 
-getAssetsNotYetEntered : Config -> CompoundState -> Maybe (List ContractAddress)
-getAssetsNotYetEntered config compoundState =
-    case compoundState.maybeAssetsIn of
+getAssetsNotYetEntered : Config -> GroveState -> Maybe (List ContractAddress)
+getAssetsNotYetEntered config groveState =
+    case groveState.maybeAssetsIn of
         Just assetsIn ->
             let
                 cTokensAddressList =
                     Dict.values config.cTokens
                         |> List.map .address
+
 
                 assetsToAdd =
                     cTokensAddressList
@@ -216,9 +217,9 @@ getAssetsNotYetEntered config compoundState =
             Nothing
 
 
-getHasAnyAssetEnabledForBorrowing : Config -> CompoundState -> Maybe Bool
-getHasAnyAssetEnabledForBorrowing config compoundState =
-    case compoundState.maybeAssetsIn of
+getHasAnyAssetEnabledForBorrowing : Config -> GroveState -> Maybe Bool
+getHasAnyAssetEnabledForBorrowing config groveState =
+    case groveState.maybeAssetsIn of
         Just assetsIn ->
             not (List.isEmpty assetsIn)
                 |> Just

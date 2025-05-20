@@ -7,16 +7,16 @@ module Ether.Contracts.CToken exposing
     )
 
 import BigInt exposing (BigInt)
-import CompoundComponents.Console as Console
-import CompoundComponents.Eth.Ethereum exposing (ContractAddress(..), CustomerAddress(..))
-import CompoundComponents.Eth.Network exposing (Network(..))
-import CompoundComponents.Ether.BNTransaction as BNTransaction exposing (BNTransactionState)
-import CompoundComponents.Ether.FromEthereumUtils as FromEthereumUtils
-import CompoundComponents.Ether.FunctionSpec as FunctionSpec
-import CompoundComponents.Ether.Helpers as EtherHelpers
-import CompoundComponents.Ether.Value as Value
-import CompoundComponents.Ether.Web3 as EtherWeb3
+import GroveComponents.Console as Console
+import GroveComponents.Eth.Ethereum exposing (ContractAddress(..), CustomerAddress(..))
+import GroveComponents.Eth.Network exposing (Network(..))
+import GroveComponents.Ether.BNTransaction as BNTransaction exposing (BNTransactionState)
+import GroveComponents.Ether.FromEthereumUtils as FromEthereumUtils
+import GroveComponents.Ether.FunctionSpec as FunctionSpec
+import GroveComponents.Ether.Value as Value
+import GroveComponents.Ether.Web3 as EtherWeb3
 import Eth.Config exposing (Config)
+import Dict
 
 
 
@@ -74,12 +74,7 @@ mint config network customerAddress cTokenAddress underlyingAmountWei bnState =
         dataResult =
             FunctionSpec.encodeCall
                 "mint"
-                (if cTokenAddress == config.cEtherToken.address then
-                    []
-
-                 else
-                    [ Value.UInt 256 underlyingAmountWei ]
-                )
+                [ Value.UInt 256 underlyingAmountWei ]
 
         ownerAddressResult =
             FromEthereumUtils.customerAddressToEtherAddress customerAddress
@@ -97,16 +92,9 @@ mint config network customerAddress cTokenAddress underlyingAmountWei bnState =
 
                         bnTransaction =
                             BNTransaction.newTransaction network fromAddress toAddress "mint" [ amountString ] bnState
-
-                        web3TransactionFunc =
-                            if cTokenAddress == config.cEtherToken.address then
-                                EtherWeb3.sendTransactionWithValue underlyingAmountWei
-
-                            else
-                                EtherWeb3.sendTransaction
                     in
                     ( Just bnTransaction
-                    , web3TransactionFunc
+                    , EtherWeb3.sendTransaction
                         (BNTransaction.getTxModule network customerAddress)
                         bnTransaction.txId
                         { from = fromAddress
@@ -234,9 +222,8 @@ repayBorrow config network customerAddress cTokenAddress underlyingAmountWei bnS
                 ( Ok fromAddress, Ok toAddress, Ok data ) ->
                     let
                         amountString =
-                            if BigInt.compare underlyingAmountWei EtherHelpers.negativeOne == EQ then
+                            if BigInt.compare underlyingAmountWei (BigInt.fromInt -1) == EQ then
                                 "-1"
-
                             else
                                 underlyingAmountWei
                                     |> BigInt.toString
