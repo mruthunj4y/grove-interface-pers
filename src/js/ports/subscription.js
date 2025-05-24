@@ -4,7 +4,7 @@ import { langFromURL } from 'grove-components/src/js/sharedEth/utils';
 import storage from '../storage';
 
 // Create a single instance of preferences storage
-const preferencesStorage = storage('preferences');
+export const preferencesStorage = storage('preferences');
 
 // Function to subscribe to console
 export function subscribeToConsole(app) {
@@ -71,4 +71,4 @@ export function subscribeToPreferences(app) {
     });
 } 
 
-app.ports.setGasPricePort.send({ amountWeiStr: "" }); 
+// app.ports.setGasPricePort.send({ amountWeiStr: "" }); 

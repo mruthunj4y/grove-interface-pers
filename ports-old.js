@@ -34,7 +34,7 @@ import {
   wrapCall,
   wrapCallErr,
   wrapSend,
-} from 'grove-components/src/js/sharedEth/xrp.js';
+} from 'grove-components/src/js/sharedEth/eth';
 
 import SleuthQuery from '../sleuth/out/SleuthLens.sol/SleuthLens.json';
 import { parseWeiStr, toScaledDecimal } from 'grove-components/src/js/sharedJs/math.js';
@@ -82,6 +82,7 @@ function safeSendPort(port, data) {
     }
     
     try {
+        console.log('Attempting to send port message:', { port, data });
         port.send(data);
     } catch (error) {
         console.error('Error sending port message:', error);
@@ -283,7 +284,7 @@ function subscribeToCTokenPorts(app, eth) {
                     const totalSupplyScaled = (totalSupplyResult || "0") / Math.pow(10, cTokenDecimals || 18);
 
                     return {
-                        cTokenAddress: cTokenAddress,
+                        cTokenAddress: cTokenAddress && typeof cTokenAddress === 'string' ? cTokenAddress.toLowerCase() : cTokenAddress,
                         exchangeRate: toScaledDecimal(exchangeRateCurrent, EXP_DECIMALS),
                         supplyRatePerDay: toScaledDecimal((supplyRateResult || "0") * BLOCKS_PER_DAY, EXP_DECIMALS),
                         borrowRatePerDay: toScaledDecimal((borrowRateResult || "0") * BLOCKS_PER_DAY, EXP_DECIMALS),
@@ -301,6 +302,7 @@ function subscribeToCTokenPorts(app, eth) {
                         borrowCap: toScaledDecimal(borrowCapResult || "0", underlyingDecimals || 18),
                         mintGuardianPaused: mintGuardianPausedResult || false,
                         underlyingPrice: toScaledDecimal(underlyingPriceResult || XRPLEVM_PRICE, EXP_DECIMALS),
+                        underlyingAssetAddress: underlyingAssetAddress && typeof underlyingAssetAddress === 'string' ? underlyingAssetAddress.toLowerCase() : underlyingAssetAddress,
                     };
                 } catch (error) {
                     console.error(`DEBUG: Error processing cToken ${cTokenAddress}:`, error);
@@ -317,14 +319,13 @@ function subscribeToCTokenPorts(app, eth) {
             console.error('DEBUG: giveCTokenMetadataPort not initialized');
         }
 
-        let allPricesList = cTokenMetadataList.map(({ cTokenAddress, underlyingPrice }) => {
-            let underlyingAssetAddress = cTokens[cTokenAddress.toLowerCase()]?.underlyingAssetAddress;
+        let allPricesList = cTokenMetadataList.map(({ cTokenAddress, underlyingPrice, underlyingAssetAddress }) => {
             if (!underlyingAssetAddress) {
                 console.warn(`DEBUG: No underlying asset address found for cToken ${cTokenAddress}`);
                 return null;
             }
             return {
-                underlyingAssetAddress: underlyingAssetAddress,
+                underlyingAssetAddress: underlyingAssetAddress && typeof underlyingAssetAddress === 'string' ? underlyingAssetAddress.toLowerCase() : underlyingAssetAddress,
                 value: underlyingPrice,
             };
         }).filter(Boolean);
@@ -390,7 +391,7 @@ function subscribeToCTokenPorts(app, eth) {
             closeFactorMantissa: "0",
             liquidationIncentiveMantissa: "0",
             cTokens: Object.keys(cTokens).map(cTokenAddress => ({
-                cToken: cTokenAddress,
+                cToken: cTokenAddress.toLowerCase(),
                 underlyingPrice: XRPLEVM_PRICE,
                 exchangeRateCurrent: "1000000000000000000",
                 supplyRatePerBlock: "0",
@@ -401,7 +402,7 @@ function subscribeToCTokenPorts(app, eth) {
                 totalCash: "0",
                 isListed: true,
                 collateralFactorMantissa: "500000000000000000", // 0.5
-                underlyingAssetAddress: cTokens[cTokenAddress].underlyingAssetAddress,
+                underlyingAssetAddress: cTokens[cTokenAddress].underlyingAssetAddress && typeof cTokens[cTokenAddress].underlyingAssetAddress === 'string' ? cTokens[cTokenAddress].underlyingAssetAddress.toLowerCase() : cTokens[cTokenAddress].underlyingAssetAddress,
                 cTokenDecimals: "18",
                 underlyingDecimals: "18",
                 compSupplySpeed: "0",
@@ -411,6 +412,7 @@ function subscribeToCTokenPorts(app, eth) {
             }))
         };
 
+        console.log('Generated response:', response);
         handleNonAccountQueryResults(app, cTokens, response);
     } catch (error) {
         console.error('Error in queryAllNoAccountPort:', error);
@@ -429,8 +431,11 @@ function subscribeToCTokenPorts(app, eth) {
                 throw new Error('compAddress is required');
             }
 
+            console.log('queryAllWithAccountPort called with:', { blockNumber, customerAddress, cTokenEntries, compAddress, capFactoryAddress });
+
             const effectiveCapFactoryAddress = capFactoryAddress || '0x0000000000000000000000000000000000000000';
             let cTokens = supportFromEntries(cTokenEntries);
+            console.log('Processed cTokens:', cTokens);
 
             // For XRPLEVM, we'll use a fixed price of 1.0 for all tokens
             const response = {
@@ -447,7 +452,7 @@ function subscribeToCTokenPorts(app, eth) {
                 },
                 capFactoryAllowance: "0",
                 cTokens: Object.keys(cTokens).map(cTokenAddress => ({
-                    cToken: cTokenAddress,
+                    cToken: cTokenAddress.toLowerCase(),
                     underlyingPrice: XRPLEVM_PRICE,
                     exchangeRateCurrent: "1000000000000000000",
                     supplyRatePerBlock: "0",
@@ -458,7 +463,7 @@ function subscribeToCTokenPorts(app, eth) {
                     totalCash: "0",
                     isListed: true,
                     collateralFactorMantissa: "500000000000000000", // 0.5
-                    underlyingAssetAddress: cTokens[cTokenAddress].underlyingAssetAddress,
+                    underlyingAssetAddress: cTokens[cTokenAddress].underlyingAssetAddress && typeof cTokens[cTokenAddress].underlyingAssetAddress === 'string' ? cTokens[cTokenAddress].underlyingAssetAddress.toLowerCase() : cTokens[cTokenAddress].underlyingAssetAddress,
                     cTokenDecimals: "18",
                     underlyingDecimals: "18",
                     compSupplySpeed: "0",
@@ -473,6 +478,8 @@ function subscribeToCTokenPorts(app, eth) {
                 }))
             };
 
+            console.log('Generated response:', response);
+
             // Process and send the data
             handleNonAccountQueryResults(app, cTokens, response);
 
@@ -481,16 +488,19 @@ function subscribeToCTokenPorts(app, eth) {
                 customerAddress: customerAddress,
                 accountLiquidity: "0",
                 accountShortfall: "0",
-                assetsIn: [],
-                trxCount: 0,
+                assetsIn: [
+                    "0x0f6e54a0cDE8e09d3035aF966eBa96EE2ba29D30".toLowerCase(), // GDai
+                    "0xE052EEAd18405406D43047790b1C765180b1F447".toLowerCase()  // GWBTC
+                ],
+                trxCount: 0
             });
 
             // Send balance data
             const balanceData = Object.keys(cTokens).map(cTokenAddress => ({
-                cTokenAddress: cTokenAddress,
+                cTokenAddress: cTokenAddress.toLowerCase(),
                 customerAddress: customerAddress,
                 cTokenWalletBalance: "0",
-                underlyingAssetAddress: cTokens[cTokenAddress].underlyingAssetAddress,
+                underlyingAssetAddress: cTokens[cTokenAddress].underlyingAssetAddress && typeof cTokens[cTokenAddress].underlyingAssetAddress === 'string' ? cTokens[cTokenAddress].underlyingAssetAddress.toLowerCase() : cTokens[cTokenAddress].underlyingAssetAddress,
                 underlyingBorrowBalance: "0",
                 underlyingSupplyBalance: "0",
                 underlyingTokenWalletBalance: "0",
@@ -818,7 +828,259 @@ function subscribeToFlywheelPorts(app, eth) {
       }
     ).catch(reportError(app));
   });
-} 
+}
+
+// Add test data function
+async function sendTestData(app) {
+    console.log('DEBUG: Sending test data through ports');
+    
+    // Fetch real data from GraphQL
+    const graphQLData = await testGraphQLData();
+    
+    // Fallback test data for CToken metadata
+    const testCTokenMetadata = [
+        {
+            cTokenAddress: "0x0f6e54a0cDE8e09d3035aF966eBa96EE2ba29D30".toLowerCase(), // GDai
+            exchangeRate: "1", // 1.0
+            supplyRatePerDay: "0.001", // 0.001 (0.1%)
+            borrowRatePerDay: "0.002", // 0.002 (0.2%)
+            collateralFactor: "0.8", // 0.8 (80%)
+            reserveFactor: "0.1", // 0.1 (10%)
+            totalBorrows: "1000", // 1,000 DAI
+            totalUnderlyingCash: "2000", // 2,000 DAI
+            totalReserves: "0.1", // 0.1 DAI
+            totalSupply: "3000", // 3,000 cDAI
+            totalSupplyUnderlying: "3000", // 3,000 DAI
+            compSupplySpeedPerBlock: "0.001", // 0.001 COMP per block
+            compSupplySpeedPerDay: "0.1", // 0.1 COMP per day
+            compBorrowSpeedPerBlock: "0.002", // 0.002 COMP per block
+            compBorrowSpeedPerDay: "0.2", // 0.2 COMP per day
+            borrowCap: "10000", // 10,000 DAI
+            mintGuardianPaused: false,
+            underlyingPrice: "1", // 1.0 USD
+            underlyingAssetAddress: "0xeBD8479f1DF837e4169D2A69663e1CeDE6A6FC1A".toLowerCase(),
+        },
+        {
+            cTokenAddress: "0xE052EEAd18405406D43047790b1C765180b1F447".toLowerCase(), // GWBTC
+            exchangeRate: "1", // 1.0
+            supplyRatePerDay: "0.001", // 0.001 (0.1%)
+            borrowRatePerDay: "0.002", // 0.002 (0.2%)
+            collateralFactor: "0.8", // 0.8 (80%)
+            reserveFactor: "0.1", // 0.1 (10%)
+            totalBorrows: "0.1", // 0.1 WBTC
+            totalUnderlyingCash: "0.2", // 0.2 WBTC
+            totalReserves: "0.01", // 0.01 WBTC
+            totalSupply: "0.3", // 0.3 cWBTC
+            totalSupplyUnderlying: "0.3", // 0.3 WBTC
+            compSupplySpeedPerBlock: "0.001", // 0.001 COMP per block
+            compSupplySpeedPerDay: "0.1", // 0.1 COMP per day
+            compBorrowSpeedPerBlock: "0.002", // 0.002 COMP per block
+            compBorrowSpeedPerDay: "0.2", // 0.2 COMP per day
+            borrowCap: "1", // 1 WBTC
+            mintGuardianPaused: false,
+            underlyingPrice: "30000", // 30,000 USD
+            underlyingAssetAddress: "0x7A4cA9C3C5E6bB9B5C8E9577f3398743A2Ee025B".toLowerCase(),
+        }
+    ];
+
+    // Fallback test data for account limits
+    const testAccountLimits = {
+        customerAddress: "0x823FD11EbcD10171262F4E5B91f789A369Dd8496",
+        accountLiquidity: "1000", // 1,000 USD
+        accountShortfall: "0",
+        assetsIn: [
+            "0x0f6e54a0cDE8e09d3035aF966eBa96EE2ba29D30".toLowerCase(), // GDai
+            "0xE052EEAd18405406D43047790b1C765180b1F447".toLowerCase()  // GWBTC
+        ],
+        trxCount: 0
+    };
+    
+    // Transform GraphQL data into our expected format
+    const realCTokenMetadata = graphQLData?.cTokenData?.data?.cTokens?.map(token => ({
+        cTokenAddress: token.id.toLowerCase(),
+        exchangeRate: token.exchangeRate,
+        supplyRatePerDay: (parseFloat(token.supplyRatePerBlock) * BLOCKS_PER_DAY).toString(),
+        borrowRatePerDay: (parseFloat(token.borrowRatePerBlock) * BLOCKS_PER_DAY).toString(),
+        collateralFactor: token.collateralFactor,
+        reserveFactor: token.reserveFactor,
+        totalBorrows: token.totalBorrows,
+        totalReserves: token.totalReserves,
+        totalSupply: token.totalSupply,
+        totalUnderlyingCash: token.totalCash,
+        underlyingPrice: token.underlying?.price || "1",
+        underlyingAssetAddress: token.underlying?.id?.toLowerCase(),
+        // Keep dummy data for fields not available in GraphQL
+        compSupplySpeedPerBlock: "0.001",
+        compSupplySpeedPerDay: "0.1",
+        compBorrowSpeedPerBlock: "0.002",
+        compBorrowSpeedPerDay: "0.2",
+        borrowCap: "10000",
+        mintGuardianPaused: false
+    })) || [];
+
+    // Transform account data
+    const realAccountData = graphQLData?.accountData?.data?.accounts?.map(account => ({
+        customerAddress: account.id.toLowerCase(),
+        assetsIn: account.tokens.map(token => token.id.toLowerCase()),
+        // Keep dummy data for fields not available in GraphQL
+        accountLiquidity: "1000",
+        accountShortfall: "0",
+        trxCount: 0
+    })) || [];
+
+    // Test data for Oracle prices using actual XRPLEVM addresses
+    const testOraclePrices = [
+        {
+            underlyingAssetAddress: "0xeBD8479f1DF837e4169D2A69663e1CeDE6A6FC1A".toLowerCase(), // DAI
+            value: "1" // 1.0 DAI
+        },
+        {
+            underlyingAssetAddress: "0x7A4cA9C3C5E6bB9B5C8E9577f3398743A2Ee025B".toLowerCase(), // WBTC
+            value: "30000" // 30,000 USD
+        }
+    ];
+    
+    // Test data for CToken balances (keep dummy data as wallet balances not available in GraphQL)
+    const testCTokenBalances = [
+        {
+            cTokenAddress: "0x0f6e54a0cDE8e09d3035aF966eBa96EE2ba29D30".toLowerCase(), // GDai
+            customerAddress: "0x823FD11EbcD10171262F4E5B91f789A369Dd8496",
+            cTokenWalletBalance: "100", // 100 cDAI
+            underlyingAssetAddress: "0xeBD8479f1DF837e4169D2A69663e1CeDE6A6FC1A".toLowerCase(), // DAI
+            underlyingBorrowBalance: "50", // 50 DAI
+            underlyingSupplyBalance: "100", // 100 DAI
+            underlyingTokenWalletBalance: "200", // 200 DAI
+            underlyingTokenAllowance: "1000" // 1,000 DAI
+        },
+        {
+            cTokenAddress: "0xE052EEAd18405406D43047790b1C765180b1F447".toLowerCase(), // GWBTC
+            customerAddress: "0x823FD11EbcD10171262F4E5B91f789A369Dd8496",
+            cTokenWalletBalance: "0.1", // 0.1 cWBTC
+            underlyingAssetAddress: "0x7A4cA9C3C5E6bB9B5C8E9577f3398743A2Ee025B".toLowerCase(), // WBTC
+            underlyingBorrowBalance: "0.05", // 0.05 WBTC
+            underlyingSupplyBalance: "0.1", // 0.1 WBTC
+            underlyingTokenWalletBalance: "0.2", // 0.2 WBTC
+            underlyingTokenAllowance: "1" // 1 WBTC
+        }
+    ];
+    
+    // Test data for comptroller metadata
+    const testComptrollerMetadata = {
+        closeFactor: "0.5", // 0.5 (50%)
+        liquidationIncentive: "1.08" // 1.08 (8% bonus)
+    };
+
+    // Send test data through ports
+    if (app.ports.giveOraclePricesAllPort) {
+        console.log('DEBUG: Sending test oracle prices');
+        safeSendPort(app.ports.giveOraclePricesAllPort, testOraclePrices);
+    }
+    
+    if (app.ports.giveCTokenMetadataPort) {
+        console.log('DEBUG: Sending CToken metadata');
+        safeSendPort(app.ports.giveCTokenMetadataPort, realCTokenMetadata.length > 0 ? realCTokenMetadata : testCTokenMetadata);
+    }
+    
+    if (app.ports.giveCTokenBalancesAllPort) {
+        console.log('DEBUG: Sending test CToken balances');
+        safeSendPort(app.ports.giveCTokenBalancesAllPort, testCTokenBalances);
+    }
+    
+    if (app.ports.giveAccountLimitsPort) {
+        console.log('DEBUG: Sending account limits');
+        safeSendPort(app.ports.giveAccountLimitsPort, realAccountData.length > 0 ? realAccountData[0] : testAccountLimits);
+    }
+    
+    if (app.ports.giveComptrollerMetadataPort) {
+        console.log('DEBUG: Sending test comptroller metadata');
+        safeSendPort(app.ports.giveComptrollerMetadataPort, testComptrollerMetadata);
+    }
+    
+    if (app.ports.giveEtherUsdPricePort) {
+        console.log('DEBUG: Sending test ether price');
+        safeSendPort(app.ports.giveEtherUsdPricePort, { price: "2000" }); // 2,000 USD
+    }
+}
+
+// Test function to fetch data from GraphQL API
+async function testGraphQLData() {
+    const GRAPHQL_URL = 'https://api.goldsky.com/api/public/project_cmamdoy8hyjpy01xr03dodf4o/subgraphs/grove/v1/gn';
+    
+    // Query for CToken data
+    const cTokenQuery = `
+        query {
+            cTokens {
+                id
+                symbol
+                underlying {
+                    id
+                    symbol
+                    price
+                }
+                exchangeRate
+                supplyRatePerBlock
+                borrowRatePerBlock
+                totalBorrows
+                totalReserves
+                totalSupply
+                totalCash
+                collateralFactor
+                reserveFactor
+            }
+        }
+    `;
+
+    // Query for account data
+    const accountQuery = `
+        query {
+            accounts {
+                id
+                tokens {
+                    id
+                    symbol
+                    borrowBalance
+                    supplyBalance
+                }
+            }
+        }
+    `;
+
+    try {
+        // Fetch CToken data
+        const cTokenResponse = await fetch(GRAPHQL_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                query: cTokenQuery
+            })
+        });
+        const cTokenData = await cTokenResponse.json();
+        console.log('CToken Data from GraphQL:', cTokenData);
+
+        // Fetch account data
+        const accountResponse = await fetch(GRAPHQL_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                query: accountQuery
+            })
+        });
+        const accountData = await accountResponse.json();
+        console.log('Account Data from GraphQL:', accountData);
+
+        return {
+            cTokenData,
+            accountData
+        };
+    } catch (error) {
+        console.error('Error fetching GraphQL data:', error);
+        return null;
+    }
+}
 
 function subscribe(
   app,
@@ -835,11 +1097,21 @@ function subscribe(
     // Mark app as initialized
     isAppInitialized = true;
     
+    // Set initial gas price
+    currentSendGasPrice = DEFAULT_GAS_PRICE;
+    console.log('DEBUG: Initialized with gas price:', currentSendGasPrice);
+    
     // Process any pending messages
     processPendingMessages();
 
     const eth = makeEth(dataProviders, networkMap, networkAbiMap, configNameToAddressMappings, defaultNetwork);
     connectedWalletPorts.subscribe(app, eth, globEthereum, networkMap, defaultNetwork, walletConnectProjectId);
+
+    // Send test data after a short delay to ensure ports are initialized
+    setTimeout(async () => {
+        console.log('DEBUG: Sending test data after initialization');
+        await sendTestData(app);
+    }, 1000);
 
     subscribeToConsole(app);
     subscribeToCTokenPorts(app, eth);

@@ -299,6 +299,11 @@ port checkTrxStatusPort : { blockNumber : Int, trxHash : String } -> Cmd msg
 
 checkTrxStatus : Int -> TrxHash -> Cmd msg
 checkTrxStatus blockNumber trxHash =
+    let
+        _ =
+            Debug.log "checkTrxStatus called with"
+                { blockNumber = blockNumber, trxHash = trxHash }
+    in
     checkTrxStatusPort
         { blockNumber = blockNumber
         , trxHash = trxHash
@@ -510,11 +515,19 @@ checkTransactions blockNumber network transactions =
 
 updateTransaction : TrxHash -> TransactionStatus -> Maybe String -> Int -> List Transaction -> List Transaction
 updateTransaction trxHash status error trxNonce transactions =
+    let
+        _ =
+            Debug.log "Updating transaction with hash" trxHash
+    in
     transactions
         |> List.map
             (\trx ->
                 if trxHash == trx.trxHash then
-                    { trx | status = status, error = error }
+                    let
+                        _ =
+                            Debug.log "Updating transaction" { oldStatus = trx.status, newStatus = status }
+                    in
+                    { trx | status = status, error = error, expectedNonce = Just trxNonce }
 
                 else
                     trx
@@ -677,7 +690,8 @@ containsTransactionType transactionType transactions =
 
 decodeTransactionStatus : Json.Decode.Decoder TransactionStatus
 decodeTransactionStatus =
-    Json.Decode.maybe Json.Decode.int |> Json.Decode.map getTransactionStatus
+    Json.Decode.maybe Json.Decode.int
+        |> Json.Decode.map getTransactionStatus
 
 
 sortedTransactions : List Transaction -> List Transaction

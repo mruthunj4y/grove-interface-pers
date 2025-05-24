@@ -58,116 +58,15 @@ export async function getBlockTimestamps(blockNumbers, network) {
     }
 }
 
-// Function to handle transaction receipts
-export async function handleReceipt(app, eth, trxHash, blockNumber, receipt, trxNonce) {
-    console.log('handleReceipt called with:', {
-        trxHash,
-        blockNumber,
-        receiptBlockNumber: receipt?.blockNumber,
-        receiptTo: receipt?.to,
-        trxNonce
-    });
 
-    if (!receipt || receipt.blockNumber > blockNumber) {
-        console.log('Skipping receipt - no receipt or block number mismatch');
-        return null;
-    } else {
-        const Comptroller = getContractJsonByName(eth, 'Comptroller');
-        console.log('Comptroller contract:', {
-            contractName: Comptroller.contractName,
-            address: Comptroller.contractName
-        });
-
-        const CToken = getContractJsonByAddress(eth, receipt.to);
-        console.log('CToken contract:', {
-            address: receipt.to,
-            contractName: CToken?.contractName
-        });
-
-        const nonOracleFailureEvent = getEvent(eth, Comptroller, 'Failure');
-        console.log('Failure event:', nonOracleFailureEvent);
-
-        // Convert status to match the expected format in the UI
-        const status = receipt.status === true ? 1 : 0;
-        console.log('Transaction status:', status);
-
-        const failures = receipt.logs
-            .map((log) => {
-                if (nonOracleFailureEvent && nonOracleFailureEvent.matches(log)) {
-                    return nonOracleFailureEvent.decode(log);
-                }
-            })
-            .filter((log) => !!log);
-
-        console.log('Transaction failures:', failures);
-
-        var error = null;
-
-        if (failures[0]) {
-            error = failures[0].error.toString();
-            console.log('Transaction error:', error);
-        }
-
-        // Send transaction update to UI
-        if (app.ports.giveUpdateTrxPort) {
-            console.log('Sending update to giveUpdateTrxPort');
-            app.ports.giveUpdateTrxPort.send({
-                trxHash: trxHash,
-                status: status,
-                error: error,
-                trxNonce: trxNonce,
-            });
-        } else {
-            console.log('giveUpdateTrxPort not available');
-        }
-
-        // Also send transaction state update to ensure UI is updated
-        if (app.ports.etherTransactionStatePort) {
-            console.log('Sending update to etherTransactionStatePort');
-            app.ports.etherTransactionStatePort.send({
-                txModule: 'collateral',
-                txId: trxNonce,
-                txHash: trxHash,
-                status: status === 1 ? 'confirmed' : 'failed',
-                blockNumber: receipt.blockNumber
-            });
-        } else {
-            console.log('etherTransactionStatePort not available');
-        }
-
-        // Log receipt details for debugging
-        console.log('Transaction receipt details:', {
-            to: receipt.to,
-            from: receipt.from,
-            contractAddress: receipt.contractAddress,
-            logs: receipt.logs,
-            status: receipt.status,
-            blockNumber: receipt.blockNumber
-        });
-
-        // If this is an enterMarkets transaction and it was successful, trigger a refresh of account data
-        if (status === 1 && receipt.to && receipt.to.toLowerCase() === Comptroller.contractName.toLowerCase()) {
-            // Trigger a refresh of account data
-            if (app.ports.queryAllWithAccountPort) {
-                const accounts = await eth.getAccounts();
-                if (accounts && accounts.length > 0) {
-                    const customerAddress = accounts[0];
-                    app.ports.queryAllWithAccountPort.send({
-                        blockNumber: receipt.blockNumber,
-                        customerAddress: customerAddress,
-                        cTokens: [], // This will be populated by the Elm side
-                        compAddress: '0x0000000000000000000000000000000000000000',
-                        capFactoryAddress: '0x0000000000000000000000000000000000000000'
-                    });
-                }
-            }
-        }
-    }
+function formatBigIntToDecimalString(value, decimals) {
+    const s = value.toString().padStart(decimals + 1, '0');
+    const intPart = s.slice(0, -decimals);
+    const decPart = s.slice(-decimals).replace(/0+$/, ''); // Remove trailing zeros
+    return decPart ? `${intPart}.${decPart}` : intPart;
 }
 
-
-// Function to get ERC20 token balance
-    export async function getERC20Balance(userAddress, tokenContractAddress, decimal) {
+export async function getERC20Balance(userAddress, tokenContractAddress, decimal = 18) {
     const functionSelector = '0x70a08231';
     const address = userAddress.replace('0x', '').padStart(64, '0');
     const data = functionSelector + address;
@@ -184,15 +83,16 @@ export async function handleReceipt(app, eth, trxHash, blockNumber, receipt, trx
             ],
         });
 
-        const balance = BigInt(result).toString();
-        const decimalForm = balance / (10 ** decimal);
-        console.log('balance',decimalForm);
-        return decimalForm;
+        if (!result) throw new Error("Empty result from eth_call");
+
+        const balance = BigInt(result);
+        const formatted = formatBigIntToDecimalString(balance, decimal);
+        return formatted;
     } catch (error) {
         console.error('Error fetching token balance:', error);
         return "0";
     }
-} 
+}
 
 export async function getERC20Allowance(userAddress, underlyingAssetAddress, tokenContractAddress, decimal=18) {
     const functionSelector = '0xdd62ed3e'; // allowance(address,address)

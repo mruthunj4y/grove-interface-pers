@@ -1,0 +1,72 @@
+{
+  "Contracts": {
+    "comptroller": "0xc8a759b2C51eB69b25e66B13A1C8f448bFdeF5b2",
+    "unitroller": "0x28DB407d2b94dc3E281D0E7331243c376500c6e1",
+    "Dai": "0xeBD8479f1DF837e4169D2A69663e1CeDE6A6FC1A",
+    "GDai": "0x0f6e54a0cDE8e09d3035aF966eBa96EE2ba29D30",
+    "WBTC": "0x7A4cA9C3C5E6bB9B5C8E9577f3398743A2Ee025B",
+    "GWBTC": "0xE052EEAd18405406D43047790b1C765180b1F447",
+    "priceOracleProxy": "0xb1993AA3E9ee53D37096C58a4B86A8B1B6ED2F8e",
+    "wbtc2_dai": "0x976A270216e8Cf560dA696b48F0feaFa318e6258",
+    "dai2_wbtc": "0x976A270216e8Cf560dA696b48F0feaFa318e6258",
+    "CompoundLens": "0xB7C8858f95c560FAc3bcCc8439237bA74F249c21"
+  },
+  "Blocks": {
+    "comptroller": 1198197,
+    "unitroller": 1198200,
+    "Dai": 1198675,
+    "GDai": 1198701,
+    "WBTC": 1198719,
+    "GWBTC": 1198756,
+    "simplePriceORacle": 1198669,
+    "jumpRateModelV2": 1198274
+  },
+  "Unitroller": {
+    "description": "Unitroller",
+    "address": "0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B"
+  },
+  "Tokens": {
+    "Dai": {
+      "address": "0xeBD8479f1DF837e4169D2A69663e1CeDE6A6FC1A",
+      "contract": "Dai",
+      "decimals": 18,
+      "name": "Dai",
+      "symbol": "DAI"
+    },
+    "WBTC": {
+      "address": "0x7A4cA9C3C5E6bB9B5C8E9577f3398743A2Ee025B",
+      "contract": "WBTC",
+      "decimals": 18,
+      "name": "wbtc",
+      "symbol": "WBTC"
+    }
+  },
+  "cTokens": {
+    "GDai": {
+      "address": "0x0f6e54a0cDE8e09d3035aF966eBa96EE2ba29D30",
+      "contract": "GErc20Delegator",
+      "decimals": 18,
+      "initial_exchange_rate_mantissa": "20000000000000000",
+      "name": "Grove Dai",
+      "symbol": "GDai",
+      "underlying": "0xeBD8479f1DF837e4169D2A69663e1CeDE6A6FC1A"
+    },
+    "GWBTC": {
+      "address": "0xE052EEAd18405406D43047790b1C765180b1F447",
+      "contract": "GErc20Delegator",
+      "decimals": 18,
+      "initial_exchange_rate_mantissa": "20000000000000000",
+      "name": "Grove WBTC",
+      "symbol": "GWBTC",
+      "underlying": "0x7A4cA9C3C5E6bB9B5C8E9577f3398743A2Ee025B"
+    }
+  },
+  "InterestRateModel": {
+    "wbtc2_dai": {
+      "address": "0x976A270216e8Cf560dA696b48F0feaFa318e6258",
+      "contract": "JumpRateModelV2",
+      "description": "JumpRateModelV2",
+      "name": "wbtc2_dai"
+    }
+  }
+}

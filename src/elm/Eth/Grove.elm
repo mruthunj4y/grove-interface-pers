@@ -757,9 +757,7 @@ giveComptrollerMetadata wrapper =
         rawWrapper : Value -> msg
         rawWrapper value =
             let
-                _ = Debug.log "[Grove] Received Comptroller metadata:" value
                 result = decodeValue decoder value
-                _ = Debug.log "[Grove] Decoded Comptroller metadata:" result
             in
             wrapper result
     in

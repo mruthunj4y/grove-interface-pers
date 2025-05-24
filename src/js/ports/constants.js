@@ -9,7 +9,7 @@ export const PROVIDER_TYPE_SHOW_ACCOUNT = 3;
 
 export const ACCOUNT_CHECK_INTERVAL_MS = 2000;
 export const NETWORK_CHECK_INTERVAL_MS = 4000;
-export const NEW_BLOCK_CHECK_INTERVAL_MS = 60_000;
+export const NEW_BLOCK_CHECK_INTERVAL_MS = 15000;
 export const SECONDS_PER_BLOCK = 12;
 export const BLOCKS_PER_DAY = 7200; // 12 seconds per block
 export const EXP_DECIMALS = 18;
