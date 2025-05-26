@@ -133,20 +133,3 @@ function checkPendingTransactions(app, eth, blockNumber) {
         console.error('❌ Error checking pending transactions:', error);
     }
 }
-
-//  function subscribeToGasService(app) {
-//   const web3 = new withWeb3Eth('https://rpc.testnet.xrplevm.org/');
-
-//   app.ports.setGasPricePort.subscribe(async ({ amountWeiStr }) => {
-//       try {
-//           // Fetch current gas price from the network
-//           const gasPrice = await web3.eth.getGasPrice();
-//           console.log('Current gas price:', web3.utils.fromWei(gasPrice, 'gwei'), 'Gwei');
-//           currentSendGasPrice = gasPrice;
-//       } catch (error) {
-//           console.warn('Error fetching gas price, using default:', error);
-//           currentSendGasPrice = DEFAULT_GAS_PRICE;
-//       }
-//   });
-// }
-// app.ports.setGasPricePort.send({ amountWeiStr: "" }); 

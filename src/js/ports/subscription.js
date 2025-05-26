@@ -32,20 +32,39 @@ export function subscribeToConsole(app) {
 
 // Function to subscribe to gas service
 
-export function subscribeToGasService(app) {
-    const web3 = new Web3('https://rpc.testnet.xrplevm.org/');
+export async function subscribeToGasService(app) {
+  app.ports.setGasPricePort.subscribe(async ({ amountWeiStr }) => {
+    try {
+      const response = await fetch("https://rpc.testnet.xrplevm.org", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "eth_gasPrice",
+          params: [],
+          id: 1
+        })
+      });
 
-    app.ports.setGasPricePort.subscribe(async ({ amountWeiStr }) => {
-        try {
-            // Fetch current gas price from the network
-            const gasPrice = await web3.eth.getGasPrice();
-            console.log('Current gas price:', web3.utils.fromWei(gasPrice, 'gwei'), 'Gwei');
-            currentSendGasPrice = gasPrice;
-        } catch (error) {
-            console.warn('Error fetching gas price, using default:', error);
-            currentSendGasPrice = DEFAULT_GAS_PRICE;
-        }
-    });
+      const data = await response.json();
+
+      if (!data.result) {
+        throw new Error("Invalid response from eth_gasPrice");
+      }
+
+      const gasPriceWei = BigInt(data.result);
+      const gasPriceGwei = gasPriceWei / BigInt(1e9);
+
+      console.log(`Current gas price: ${gasPriceGwei} Gwei`);
+
+      currentSendGasPrice = gasPriceWei.toString();
+    } catch (error) {
+      console.warn("Error fetching gas price, using default:", error);
+      currentSendGasPrice = DEFAULT_GAS_PRICE;
+    }
+  });
 }
 
 

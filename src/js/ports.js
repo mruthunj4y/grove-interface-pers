@@ -34,7 +34,7 @@ import {
 } from 'grove-components/src/js/sharedEth/eth.js';
 import { parseWeiStr, toScaledDecimal } from 'grove-components/src/js/sharedJs/math.js';
 import { NEW_BLOCK_CHECK_INTERVAL_MS, BLOCKS_PER_DAY, EXP_DECIMALS, DEFAULT_GAS_PRICE, DEFAULT_GAS_LIMIT, XRPLEVM_PRICE } from './ports/constants.js';
-import {subscribeToPreferences, subscribeToConsole } from './ports/subscription.js';
+import {subscribeToPreferences, subscribeToConsole, subscribeToGasService } from './ports/subscription.js';
 import {subscribeToNewBlocks} from './ports/blockSubscription'
 import {subscribeToCheckTrxStatus, subscribeToStoreTransaction, startPendingTransactionChecker} from './ports/transactionSubscription'
 import {reportError, getContractJsonByName, getContractJsonByAddress, getBlockTimestamps, getERC20Balance, getERC20Allowance, supplyUnderlying} from './ports/utils.js'
@@ -200,7 +200,6 @@ async function testGraphQLData(app, eth, globEthereum) {
       }
     }
 
-    console.log('Connected address:', connectedAddress);
     
     // GraphQL API endpoint
     const GRAPHQL_URL = 'https://api.goldsky.com/api/public/project_cmamdoy8hyjpy01xr03dodf4o/subgraphs/grove/v1/gn';
@@ -279,7 +278,6 @@ async function testGraphQLData(app, eth, globEthereum) {
 
 
     // Fetch data from GraphQL API
-    console.log('Fetching data from GraphQL API...');
     const response = await fetch(GRAPHQL_URL, {
       method: 'POST',
       headers: {
@@ -640,6 +638,17 @@ const comptrollerMetadata = {
           cTokenBalances[existingIndex].cTokenWalletBalance = token.gTokenBalance || "0";
           cTokenBalances[existingIndex].underlyingBorrowBalance = token.storedBorrowBalance || "0";
           cTokenBalances[existingIndex].underlyingSupplyBalance = token.totalUnderlyingSupplied || "0";
+          
+          // Increment transaction count using transactionHashes
+          if (token.transactionHashes && Array.isArray(token.transactionHashes)) {
+            accountLimits.trxCount += token.transactionHashes.length;
+          }
+          
+          if (token.enteredMarket) {
+            if (!accountLimits.assetsIn.includes(cTokenAddress)) {
+              accountLimits.assetsIn.push(cTokenAddress);
+            }
+          }
         }
       });
     }
@@ -655,7 +664,6 @@ const comptrollerMetadata = {
     }
     
     if (app.ports.giveCTokenMetadataPort) {
-      console.log('DEBUG: Sending CToken metadata:', cTokenMetadata);
       safeSendPort(app.ports.giveCTokenMetadataPort, cTokenMetadata);
     }
     
@@ -729,13 +737,10 @@ function subscribe(
     subscribeToNewBlocks(app, eth);
     subscribeToCheckTrxStatus(app, eth);
     subscribeToStoreTransaction(app, eth);
-    
-    // Start the direct transaction checker to poll for transaction status
-    // This will regularly check all pending transactions without waiting for new blocks
     console.log('Starting direct transaction checker for pending transactions');
     startPendingTransactionChecker(app, eth);
     subscribeToPreferences(app);
-    // subscribeToGasService(app);
+    subscribeToGasService(app);
     subscribeToRepl(app, eth, configFiles, configAbiFiles, connectedWalletPorts.showAccount);
     subscribeToFlywheelPorts(app, eth);
     subscribeToEtherPorts(app, eth);

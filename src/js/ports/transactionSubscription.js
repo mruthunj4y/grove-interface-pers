@@ -107,7 +107,7 @@ export function subscribeToCheckTrxStatus(app, eth) {
                     // If receipt exists, transaction is mined - process it
                     if (receipt) {
                         console.log('✅ Transaction is mined, updating status for:', trxHash);
-                        return handleReceipt(app, eth, trxHash, blockNumber, receipt, transaction.nonce);
+                      return handleReceipt(app, eth, trxHash, blockNumber, receipt, transaction.nonce);
                     } else {
                         console.log('⏳ Transaction still pending, no receipt yet for:', trxHash);
                         // No need to update status as it should already be pending (0)

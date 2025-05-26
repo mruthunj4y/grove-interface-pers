@@ -94,7 +94,7 @@ export async function getERC20Balance(userAddress, tokenContractAddress, decimal
     }
 }
 
-export async function getERC20Allowance(userAddress, underlyingAssetAddress, tokenContractAddress, decimal=18) {
+export async function getERC20Allowance(userAddress, underlyingAssetAddress, tokenContractAddress, decimal = 18) {
     const functionSelector = '0xdd62ed3e'; // allowance(address,address)
     const ownerAddress = userAddress.replace('0x', '').padStart(64, '0');
     const spender = tokenContractAddress.replace('0x', '').padStart(64, '0');
@@ -112,9 +112,11 @@ export async function getERC20Allowance(userAddress, underlyingAssetAddress, tok
             ],
         });
 
-        const allowance = BigInt(result).toString();
-        const decimalForm = allowance / (10 ** decimal);
-        return decimalForm;
+        if (!result) throw new Error("Empty result from eth_call");
+
+        const allowance = BigInt(result);
+        const formatted = formatBigIntToDecimalString(allowance, decimal);
+        return formatted;
     } catch (error) {
         console.error('Error fetching token allowance:', error);
         return "0";
